@@ -3,8 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Digital Mirror</title>
+    <title>The Perfect Smile Test</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- TensorFlow.js Core -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <!-- TensorFlow.js WebGL Backend -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <!-- MediaPipe Face Mesh -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+    <!-- Face Landmarks Detection Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
 </head>
 <body>
     <div class="container">
@@ -14,7 +22,7 @@
                 <canvas id="distortion-canvas"></canvas>
                 <div class="overlay" id="overlay">
                     <div class="humanity-level" id="humanity-level">POTENTIAL HUMANITY: 100%</div>
-                    <div class="clean-instruction" id="clean-instruction">Look into the mirror and say 'I am human'</div>
+                    <div class="clean-instruction" id="clean-instruction">Look into the mirror and say 'I am human' to begin smile verification</div>
                     <div class="listening-indicator" id="listening-indicator" style="display: none;">Listening...</div>
                 </div>
             </div>
@@ -22,15 +30,14 @@
         
         <div class="captcha-overlay" id="captcha-overlay" style="display: none;">
             <div class="captcha-content">
-                <h1>HUMAN VERIFICATION REQUIRED</h1>
-                <div class="captcha-instruction">Decode the 8-digit code hidden in the image below</div>
-                <div class="captcha-timer" id="captcha-timer">Time: 2.0s</div>
+                <h1>SMILE VERIFICATION REQUIRED</h1>
+                <div class="captcha-instruction">Please smile to verify your humanity</div>
+                <div class="captcha-timer" id="captcha-timer">Analysis Progress: 0%</div>
                 <div class="captcha-image-container">
-                    <canvas id="captcha-canvas" width="400" height="100"></canvas>
+                    <canvas id="captcha-canvas" width="320" height="120"></canvas>
                 </div>
                 <div class="captcha-input-container">
-                    <input type="text" id="captcha-input" placeholder="Enter 8-digit code" maxlength="8" autocomplete="off">
-                    <button id="captcha-submit">SUBMIT</button>
+                    <button id="captcha-submit" style="display: none;">TRY AGAIN</button>
                 </div>
                 <div class="captcha-status" id="captcha-status"></div>
             </div>
