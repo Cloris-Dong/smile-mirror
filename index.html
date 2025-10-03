@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Digital Mirror</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="mirror-frame">
+            <div class="mirror-surface">
+                <video id="webcam" autoplay muted playsinline></video>
+                <canvas id="distortion-canvas"></canvas>
+                <div class="overlay" id="overlay">
+                    <div class="humanity-level" id="humanity-level">POTENTIAL HUMANITY: 100%</div>
+                    <div class="clean-instruction" id="clean-instruction">Look into the mirror and say 'I am human'</div>
+                    <div class="listening-indicator" id="listening-indicator" style="display: none;">Listening...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="captcha-overlay" id="captcha-overlay" style="display: none;">
+            <div class="captcha-content">
+                <h1>HUMAN VERIFICATION REQUIRED</h1>
+                <div class="captcha-instruction">Decode the 8-digit code hidden in the image below</div>
+                <div class="captcha-timer" id="captcha-timer">Time: 2.0s</div>
+                <div class="captcha-image-container">
+                    <canvas id="captcha-canvas" width="400" height="100"></canvas>
+                </div>
+                <div class="captcha-input-container">
+                    <input type="text" id="captcha-input" placeholder="Enter 8-digit code" maxlength="8" autocomplete="off">
+                    <button id="captcha-submit">SUBMIT</button>
+                </div>
+                <div class="captcha-status" id="captcha-status"></div>
+            </div>
+        </div>
+        
+        <div class="failure-overlay" id="failure-overlay">
+            <div class="failure-content">
+                <h1>HUMANITY VERIFICATION FAILED</h1>
+                <div class="failure-text">
+                    POTENTIAL HUMANITY: 0%
+                </div>
+                <div class="failure-message">
+                    Subject exhibits consistent cognitive limitations.<br>
+                    Unable to process machine-readable verification patterns.<br>
+                    Classification: UNKNOWN
+                </div>
+                <button class="reset-button" id="reset-button">Try Again</button>
+            </div>
+        </div>
+        
+        <div class="verdict-overlay" id="verdict-overlay">
+            <div class="verdict-content">
+                <h1>SYSTEM VERDICT</h1>
+                <div class="verdict-text" id="verdict-text">
+                    Your image does not match known human templates.
+                </div>
+                <div class="verdict-subtext">
+                    Access denied. Human verification failed.
+                </div>
+                <button class="reset-button" id="reset-button">Try Again</button>
+            </div>
+        </div>
+        
+        <div class="error-message" id="error-message">
+            <p>Camera and microphone access required. Please allow permissions to experience The Digital Mirror.</p>
+            <button class="retry-button" id="retry-button">Retry</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

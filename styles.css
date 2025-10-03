@@ -1,0 +1,772 @@
+/* The Digital Mirror - Dark Cyberpunk Styling */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background: #000;
+    color: #00ff00;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.mirror-frame {
+    position: relative;
+    width: 90vw;
+    height: 90vh;
+    max-width: 800px;
+    max-height: 600px;
+    border: 3px solid #00ff00;
+    border-radius: 10px;
+    box-shadow: 
+        0 0 20px #00ff00,
+        inset 0 0 20px rgba(0, 255, 0, 0.1);
+    background: #000;
+    overflow: hidden;
+}
+
+.mirror-surface {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+}
+
+#webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#distortion-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.humanity-level {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+    font-weight: bold;
+    text-shadow: 0 0 10px #00ff00;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: 1px solid #00ff00;
+}
+
+.clean-instruction {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 1.1rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 15px 25px;
+    border-radius: 5px;
+    border: 1px solid #00ff00;
+    text-shadow: 0 0 10px #00ff00;
+}
+
+.listening-indicator {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    opacity: 0.8;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 12px;
+    border-radius: 5px;
+    border: 1px solid #00ff00;
+}
+
+.captcha-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.captcha-content {
+    background: #000;
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    max-width: 500px;
+    width: 90%;
+}
+
+.captcha-content h1 {
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px #00ff00;
+}
+
+.captcha-instruction {
+    color: #ffffff;
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+.captcha-timer {
+    color: #ff0000;
+    font-family: 'Courier New', monospace;
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px #ff0000;
+}
+
+.captcha-image-container {
+    margin: 20px 0;
+    border: 1px solid #00ff00;
+    border-radius: 5px;
+    padding: 10px;
+    background: #111;
+}
+
+#captcha-canvas {
+    border: 1px solid #333;
+    border-radius: 3px;
+    background: #fefefe;
+}
+
+.captcha-input-container {
+    margin: 20px 0;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+}
+
+#captcha-input {
+    background: #000;
+    border: 1px solid #00ff00;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 1.2rem;
+    padding: 10px 15px;
+    border-radius: 5px;
+    width: 200px;
+    text-align: center;
+    letter-spacing: 2px;
+}
+
+#captcha-input:focus {
+    outline: none;
+    box-shadow: 0 0 10px #00ff00;
+}
+
+#captcha-submit {
+    background: #00ff00;
+    color: #000;
+    border: none;
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+    font-weight: bold;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#captcha-submit:hover {
+    background: #00cc00;
+    box-shadow: 0 0 10px #00ff00;
+}
+
+.captcha-status {
+    color: #ffff00;
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+    margin-top: 15px;
+    min-height: 20px;
+}
+
+.failure-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.failure-content {
+    text-align: center;
+    background: #000;
+    border: 3px solid #ffff00;
+    border-radius: 10px;
+    padding: 40px;
+    max-width: 600px;
+    box-shadow: 0 0 30px #ffff00;
+}
+
+.failure-content h1 {
+    color: #ffff00;
+    font-size: 2.5em;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px #ffff00;
+    font-family: 'Courier New', monospace;
+}
+
+.failure-text {
+    color: #ff0000;
+    font-size: 1.8em;
+    margin-bottom: 20px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    text-shadow: 0 0 10px #ff0000;
+}
+
+.failure-message {
+    color: #ffffff;
+    font-size: 1.1em;
+    margin-bottom: 20px;
+    line-height: 1.5;
+    font-family: 'Courier New', monospace;
+}
+
+.failure-subtext {
+    color: #ffff00;
+    font-size: 1em;
+    margin-bottom: 30px;
+    font-style: italic;
+    font-family: 'Courier New', monospace;
+}
+
+.verdict-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.verdict-content {
+    text-align: center;
+    background: #000;
+    border: 3px solid #ff0000;
+    border-radius: 10px;
+    padding: 40px;
+    max-width: 600px;
+    box-shadow: 0 0 30px #ff0000;
+}
+
+.verdict-content h1 {
+    color: #ff0000;
+    font-size: 2.5em;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px #ff0000;
+    animation: glitch 0.3s infinite;
+}
+
+.verdict-text {
+    color: #ff0000;
+    font-size: 1.5em;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.verdict-subtext {
+    color: #ff6666;
+    font-size: 1.2em;
+    margin-bottom: 30px;
+}
+
+.reset-button, .retry-button {
+    background: #000;
+    color: #00ff00;
+    border: 2px solid #00ff00;
+    padding: 15px 30px;
+    font-size: 16px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+}
+
+.reset-button:hover, .retry-button:hover {
+    background: #00ff00;
+    color: #000;
+    box-shadow: 0 0 20px #00ff00;
+}
+
+.error-message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #000;
+    border: 2px solid #ff0000;
+    border-radius: 10px;
+    padding: 30px;
+    text-align: center;
+    z-index: 10;
+    display: none;
+}
+
+.error-message p {
+    color: #ff0000;
+    margin-bottom: 20px;
+    font-size: 16px;
+}
+
+/* Advanced Glitch Distortions for The Digital Mirror */
+
+/* Base video styling - clean container, glitch only on video */
+#webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    transition: all 0.3s ease;
+    position: relative;
+    /* Remove any base filters - start clean */
+}
+
+/* LEVEL 1: RGB Channel Separation - Video Only */
+#webcam.distortion-1 {
+    filter: 
+        drop-shadow(3px 0 0 red) 
+        drop-shadow(-3px 0 0 cyan) 
+        contrast(1.4) 
+        brightness(1.2);
+    animation: rgb-shift 0.3s ease-in-out;
+}
+
+@keyframes rgb-shift {
+    0%, 100% { 
+        filter: drop-shadow(3px 0 0 red) drop-shadow(-3px 0 0 cyan);
+    }
+    50% { 
+        filter: drop-shadow(-5px 0 0 red) drop-shadow(5px 0 0 cyan);
+    }
+}
+
+/* LEVEL 2: Digital Blocks & Scan Lines - Video Only */
+#webcam.distortion-2 {
+    filter: contrast(1.8) brightness(1.4);
+    animation: digital-noise 0.2s linear infinite, block-glitch 0.8s ease-in-out infinite;
+    position: relative;
+}
+
+#webcam.distortion-2::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+        repeating-linear-gradient(
+            0deg,
+            transparent 0px,
+            rgba(255, 0, 100, 0.1) 1px,
+            transparent 2px,
+            transparent 4px
+        ),
+        repeating-linear-gradient(
+            90deg,
+            transparent 0px,
+            rgba(0, 255, 200, 0.05) 1px,
+            transparent 2px,
+            transparent 6px
+        );
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes digital-noise {
+    0% { 
+        background-position: 0 0, 0 0; 
+    }
+    100% { 
+        background-position: 0 5px, 3px 0; 
+    }
+}
+
+@keyframes block-glitch {
+    0%, 90%, 100% { 
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    }
+    10% { 
+        clip-path: polygon(0 10%, 85% 15%, 90% 80%, 0 85%);
+    }
+    20% { 
+        clip-path: polygon(15% 0, 100% 5%, 95% 90%, 10% 100%);
+    }
+}
+
+/* LEVEL 3: Mosaic Fragmentation - Video Only */
+#webcam.distortion-3 {
+    filter: contrast(2.2) brightness(1.6) saturate(0.3);
+    transform: scaleX(-1) skew(-2deg, 1deg);
+    clip-path: polygon(
+        0% 5%, 25% 0%, 50% 8%, 75% 2%, 100% 12%,
+        95% 25%, 100% 50%, 88% 75%, 100% 95%,
+        75% 100%, 50% 92%, 25% 100%, 0% 88%,
+        8% 75%, 0% 50%, 15% 25%
+    );
+    animation: fragment-shift 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes fragment-shift {
+    0% {
+        transform: scaleX(-1) skew(-2deg, 1deg) translate(0, 0);
+        clip-path: polygon(
+            0% 5%, 25% 0%, 50% 8%, 75% 2%, 100% 12%,
+            95% 25%, 100% 50%, 88% 75%, 100% 95%,
+            75% 100%, 50% 92%, 25% 100%, 0% 88%,
+            8% 75%, 0% 50%, 15% 25%
+        );
+    }
+    100% {
+        transform: scaleX(-1) skew(3deg, -2deg) translate(5px, -3px);
+        clip-path: polygon(
+            5% 0%, 30% 8%, 55% 2%, 80% 10%, 95% 5%,
+            100% 30%, 92% 55%, 100% 80%, 88% 100%,
+            70% 95%, 45% 100%, 20% 92%, 5% 100%,
+            0% 70%, 12% 45%, 0% 20%
+        );
+    }
+}
+
+/* LEVEL 4: Data Corruption - Video Only */
+#webcam.distortion-4 {
+    filter: 
+        contrast(3) 
+        brightness(2) 
+        saturate(0) 
+        invert(0.3)
+        blur(1px);
+    transform: scaleX(-1) scale(1.1, 0.8) skew(8deg, -3deg);
+    animation: data-corruption 0.15s linear infinite;
+    position: relative;
+}
+
+#webcam.distortion-4::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        repeating-conic-gradient(
+            from 0deg at 50% 50%,
+            transparent 0deg,
+            rgba(255, 0, 0, 0.1) 60deg,
+            transparent 120deg,
+            rgba(0, 255, 0, 0.1) 180deg,
+            transparent 240deg,
+            rgba(0, 0, 255, 0.1) 300deg,
+            transparent 360deg
+        );
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes data-corruption {
+    0% { 
+        transform: scaleX(-1) scale(1.1, 0.8) skew(8deg, -3deg) translate(0, 0);
+        filter: contrast(3) brightness(2) saturate(0) invert(0.3) blur(1px);
+    }
+    20% { 
+        transform: scaleX(-1) scale(0.9, 1.2) skew(-5deg, 8deg) translate(-10px, 5px);
+        filter: contrast(4) brightness(1.5) saturate(0) invert(0.8) blur(2px);
+    }
+    40% { 
+        transform: scaleX(-1) scale(1.3, 0.6) skew(12deg, -8deg) translate(8px, -8px);
+        filter: contrast(2) brightness(3) saturate(0) invert(0.1) blur(3px);
+    }
+    60% { 
+        transform: scaleX(-1) scale(0.7, 1.4) skew(-10deg, 5deg) translate(-5px, 10px);
+        filter: contrast(5) brightness(1) saturate(0) invert(0.7) blur(1px);
+    }
+    80% { 
+        transform: scaleX(-1) scale(1.2, 0.9) skew(15deg, -12deg) translate(12px, -3px);
+        filter: contrast(1) brightness(4) saturate(0) invert(0.4) blur(4px);
+    }
+    100% { 
+        transform: scaleX(-1) scale(1.1, 0.8) skew(8deg, -3deg) translate(0, 0);
+        filter: contrast(3) brightness(2) saturate(0) invert(0.3) blur(1px);
+    }
+}
+
+/* LEVEL 5: Complete System Failure - Video Only */
+#webcam.distortion-5 {
+    filter: 
+        contrast(10) 
+        brightness(0.1) 
+        saturate(0) 
+        invert(1)
+        blur(8px)
+        drop-shadow(0 0 20px red);
+    transform: scaleX(-1) scale(0.3, 2.5) skew(45deg, -25deg) rotate(15deg);
+    opacity: 0.7;
+    animation: system-failure 0.1s linear infinite;
+    position: relative;
+}
+
+#webcam.distortion-5::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        repeating-linear-gradient(
+            45deg,
+            rgba(255, 0, 0, 0.3) 0px,
+            transparent 2px,
+            transparent 4px,
+            rgba(255, 0, 0, 0.3) 6px
+        ),
+        repeating-linear-gradient(
+            -45deg,
+            rgba(0, 255, 0, 0.2) 0px,
+            transparent 3px,
+            transparent 6px,
+            rgba(0, 255, 0, 0.2) 9px
+        );
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes system-failure {
+    0% { 
+        transform: scaleX(-1) scale(0.3, 2.5) skew(45deg, -25deg) rotate(15deg);
+        filter: contrast(10) brightness(0.1) invert(1) blur(8px);
+        opacity: 0.7;
+    }
+    10% { 
+        transform: scaleX(-1) scale(2.1, 0.2) skew(-30deg, 40deg) rotate(-25deg);
+        filter: contrast(15) brightness(0.05) invert(0) blur(12px);
+        opacity: 0.3;
+    }
+    20% { 
+        transform: scaleX(-1) scale(0.1, 3.2) skew(60deg, -45deg) rotate(35deg);
+        filter: contrast(5) brightness(0.2) invert(1) blur(15px);
+        opacity: 0.9;
+    }
+    30% { 
+        transform: scaleX(-1) scale(1.8, 0.4) skew(-40deg, 30deg) rotate(-15deg);
+        filter: contrast(20) brightness(0.01) invert(0) blur(6px);
+        opacity: 0.2;
+    }
+    40% { 
+        transform: scaleX(-1) scale(0.5, 2.8) skew(25deg, -35deg) rotate(45deg);
+        filter: contrast(8) brightness(0.15) invert(1) blur(20px);
+        opacity: 0.8;
+    }
+    50% { 
+        transform: scaleX(-1) scale(2.5, 0.1) skew(-55deg, 50deg) rotate(-35deg);
+        filter: contrast(25) brightness(0.02) invert(0) blur(10px);
+        opacity: 0.1;
+    }
+    60% { 
+        transform: scaleX(-1) scale(0.2, 3.5) skew(35deg, -20deg) rotate(25deg);
+        filter: contrast(12) brightness(0.18) invert(1) blur(18px);
+        opacity: 0.7;
+    }
+    70% { 
+        transform: scaleX(-1) scale(1.9, 0.3) skew(-45deg, 35deg) rotate(-45deg);
+        filter: contrast(18) brightness(0.03) invert(0) blur(8px);
+        opacity: 0.4;
+    }
+    80% { 
+        transform: scaleX(-1) scale(0.4, 2.9) skew(50deg, -40deg) rotate(55deg);
+        filter: contrast(6) brightness(0.12) invert(1) blur(25px);
+        opacity: 0.9;
+    }
+    90% { 
+        transform: scaleX(-1) scale(2.2, 0.2) skew(-25deg, 45deg) rotate(-20deg);
+        filter: contrast(22) brightness(0.04) invert(0) blur(14px);
+        opacity: 0.3;
+    }
+    100% { 
+        transform: scaleX(-1) scale(0.3, 2.5) skew(45deg, -25deg) rotate(15deg);
+        filter: contrast(10) brightness(0.1) invert(1) blur(8px);
+        opacity: 0.7;
+    }
+}
+
+/* Additional Glitch Overlay Effects */
+.glitch-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: 
+        repeating-linear-gradient(
+            0deg,
+            transparent 0px,
+            rgba(255, 255, 255, 0.03) 1px,
+            transparent 2px,
+            transparent 4px
+        );
+    animation: overlay-flicker 0.3s linear infinite;
+}
+
+@keyframes overlay-flicker {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+
+/* Temporary flash effect for transitions */
+.flash-effect {
+    animation: flash-white 0.1s ease-out;
+}
+
+@keyframes flash-white {
+    0% { filter: brightness(10) contrast(10); }
+    100% { filter: brightness(1) contrast(1); }
+}
+
+/* Error state styling */
+.error-corruption {
+    position: relative;
+    overflow: hidden;
+}
+
+.error-corruption::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+        repeating-linear-gradient(
+            45deg,
+            rgba(255, 0, 0, 0.1) 0px,
+            transparent 2px,
+            transparent 10px,
+            rgba(255, 0, 0, 0.1) 12px
+        );
+    animation: error-sweep 0.5s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes error-sweep {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+/* Glitch Animation */
+@keyframes glitch {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+    100% { transform: translate(0); }
+}
+
+/* Scanline Effect */
+.mirror-surface::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        transparent 50%,
+        rgba(0, 255, 0, 0.03) 50%
+    );
+    background-size: 100% 4px;
+    animation: scanline 0.1s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes scanline {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(4px); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .mirror-frame {
+        width: 95vw;
+        height: 95vh;
+    }
+    
+    .verdict-content {
+        padding: 20px;
+        margin: 20px;
+    }
+    
+    .verdict-content h1 {
+        font-size: 2em;
+    }
+    
+    .verdict-text {
+        font-size: 1.2em;
+    }
+}
