@@ -102,6 +102,7 @@ class DigitalMirror {
                 video: { 
                     width: { ideal: 720 },
                     height: { ideal: 1280 },
+                    aspectRatio: 9/16,
                     facingMode: 'user'
                 },
                 audio: true // Request microphone access
@@ -726,16 +727,15 @@ class DigitalMirror {
         const analysisSteps = [
             'Initializing facial recognition...',
             'Analyzing lip curvature...',
-            'Measuring Duchenne markers...',
-            'Calculating authenticity score...',
-            'Generating final report...'
+            'Detecting Duchenne markers...',
+            'Calculating authenticity score...'
         ];
         
         let stepIndex = 0;
         
         this.analysisTimer = setInterval(() => {
-            progress += 20;
-            this.showListeningIndicator(`Analysis Progress: ${progress}% - ${analysisSteps[stepIndex] || 'Processing...'}`);
+            progress += 25;
+            this.showListeningIndicator(`Analysis Progress: ${Math.min(progress, 100)}% - ${analysisSteps[stepIndex] || 'Processing...'}`);
             
             if (stepIndex < analysisSteps.length - 1) {
                 stepIndex++;
@@ -746,7 +746,7 @@ class DigitalMirror {
                 this.stopOverlayUpdates();
                 this.showSmileResults();
             }
-        }, 600);
+        }, 1000);
     }
     
     // Set up the facial overlay canvas to match video dimensions
@@ -1023,7 +1023,7 @@ class DigitalMirror {
                     pixelX = x * this.webcam.videoWidth;
                     pixelY = y * this.webcam.videoHeight;
                     console.log(`Converting normalized coordinates (${x}, ${y}) to pixels (${pixelX}, ${pixelY})`);
-                } else {
+            } else {
                     // Coordinates are already in pixels, use as-is
                     pixelX = x;
                     pixelY = y;
@@ -1136,39 +1136,69 @@ class DigitalMirror {
     
     // Draw simple face bounding box
     drawFaceBoundingBox(ctx) {
-        if (!this.faceBoundingBox) return;
+        if (!this.realLandmarks || this.realLandmarks.length < 468) return;
         
         const width = this.facialOverlay.width;
-        const height = this.facialOverlay.height;
         
-        // Flip x coordinate for mirror effect
-        const mirroredX = width - this.faceBoundingBox.x;
-        const boxX = mirroredX - this.faceBoundingBox.width / 2;
-        const boxY = this.faceBoundingBox.y - this.faceBoundingBox.height / 2;
+        // Calculate convex hull from all landmarks to get natural face outline
+        const points = this.realLandmarks.map(l => ({x: l[0], y: l[1]}));
         
-        // Draw bounding box
+        // Simple convex hull (gift wrapping algorithm)
+        function convexHull(points) {
+            if (points.length < 3) return points;
+            
+            let hull = [];
+            let leftmost = points.reduce((min, p) => p.x < min.x ? p : min);
+            let current = leftmost;
+            
+            do {
+                hull.push(current);
+                let next = points[0];
+                
+                for (let p of points) {
+                    if (p === current) continue;
+                    const cross = (next.x - current.x) * (p.y - current.y) - (next.y - current.y) * (p.x - current.x);
+                    if (next === current || cross < 0) next = p;
+                }
+                current = next;
+            } while (current !== leftmost);
+            
+            return hull;
+        }
+        
+        const hullPoints = convexHull(points);
+        
+        // Draw the hull outline
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 3;
-        ctx.strokeRect(boxX, boxY, this.faceBoundingBox.width, this.faceBoundingBox.height);
+        ctx.beginPath();
         
-        // Draw corner markers
-        const cornerSize = 10;
+        hullPoints.forEach((point, i) => {
+            const x = width - point.x;  // Mirror for webcam effect
+            const y = point.y;
+            
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Draw corner markers at key face points (forehead, chin, cheeks)
+        const keyPoints = [10, 152, 234, 454];  // Top, bottom, left, right of face
         ctx.fillStyle = '#00ff00';
         
-        // Top-left corner
-        ctx.fillRect(boxX - cornerSize/2, boxY - cornerSize/2, cornerSize, cornerSize);
-        // Top-right corner
-        ctx.fillRect(boxX + this.faceBoundingBox.width - cornerSize/2, boxY - cornerSize/2, cornerSize, cornerSize);
-        // Bottom-left corner
-        ctx.fillRect(boxX - cornerSize/2, boxY + this.faceBoundingBox.height - cornerSize/2, cornerSize, cornerSize);
-        // Bottom-right corner
-        ctx.fillRect(boxX + this.faceBoundingBox.width - cornerSize/2, boxY + this.faceBoundingBox.height - cornerSize/2, cornerSize, cornerSize);
-        
-        // Update face center for measurements (mirrored)
-        this.faceCenter = {
-            x: mirroredX,
-            y: this.faceBoundingBox.y
-        };
+        keyPoints.forEach(idx => {
+            if (idx < this.realLandmarks.length) {
+                const landmark = this.realLandmarks[idx];
+                const x = width - landmark[0];
+                const y = landmark[1];
+                ctx.fillRect(x - 5, y - 5, 10, 10);
+            }
+        });
     }
     
     // Draw facial landmarks with connections (like MediaPipe)
@@ -1476,102 +1506,92 @@ class DigitalMirror {
     
     // Draw simple measurement lines inside bounding box
     drawMeasurementLines(ctx) {
-        if (!this.faceBoundingBox) return;
+        if (!this.realLandmarks || this.realLandmarks.length < 468) return;
         
         const width = this.facialOverlay.width;
-        const mirroredX = width - this.faceBoundingBox.x;
-        const boxX = mirroredX - this.faceBoundingBox.width / 2;
-        const boxY = this.faceBoundingBox.y - this.faceBoundingBox.height / 2;
         
         ctx.strokeStyle = '#ffff00';
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
         
-        // Horizontal line across eyes (top third of face)
-        const eyeY = boxY + this.faceBoundingBox.height * 0.3;
+        // Horizontal line across eyes
+        const leftEye = this.realLandmarks[33];
+        const rightEye = this.realLandmarks[263];
         ctx.beginPath();
-        ctx.moveTo(boxX, eyeY);
-        ctx.lineTo(boxX + this.faceBoundingBox.width, eyeY);
+        ctx.moveTo(width - leftEye[0], leftEye[1]);
+        ctx.lineTo(width - rightEye[0], rightEye[1]);
         ctx.stroke();
         
-        // Horizontal line across mouth (bottom third of face)
-        const mouthY = boxY + this.faceBoundingBox.height * 0.7;
+        // Horizontal line across mouth
+        const leftMouth = this.realLandmarks[61];
+        const rightMouth = this.realLandmarks[291];
         ctx.beginPath();
-        ctx.moveTo(boxX, mouthY);
-        ctx.lineTo(boxX + this.faceBoundingBox.width, mouthY);
+        ctx.moveTo(width - leftMouth[0], leftMouth[1]);
+        ctx.lineTo(width - rightMouth[0], rightMouth[1]);
         ctx.stroke();
         
-        // Vertical line down center of face
-        const centerX = boxX + this.faceBoundingBox.width / 2;
+        // Vertical centerline (nose to chin)
+        const noseTop = this.realLandmarks[168];
+        const chin = this.realLandmarks[152];
         ctx.beginPath();
-        ctx.moveTo(centerX, boxY);
-        ctx.lineTo(centerX, boxY + this.faceBoundingBox.height);
+        ctx.moveTo(width - noseTop[0], noseTop[1]);
+        ctx.lineTo(width - chin[0], chin[1]);
         ctx.stroke();
         
         ctx.setLineDash([]);
     }
     
-    // Draw live measurement labels using actual landmarks
+    // Draw measurement labels
     drawMeasurementLabels(ctx) {
-        if (!this.faceBoundingBox) return;
+        if (!this.faceBoundingBox || !this.realLandmarks || this.realLandmarks.length < 468) return;
         
         const width = this.facialOverlay.width;
+        
+        // Key smile landmarks from MediaPipe Face Mesh
+        const leftMouth = this.realLandmarks[61];      // Left mouth corner
+        const rightMouth = this.realLandmarks[291];    // Right mouth corner
+        const topLip = this.realLandmarks[13];         // Upper lip center
+        const bottomLip = this.realLandmarks[14];      // Lower lip center
+        const nose = this.realLandmarks[1];            // Nose tip
+        const leftEyeOuter = this.realLandmarks[33];   // Left eye outer corner
+        const leftEyeInner = this.realLandmarks[133];  // Left eye inner corner
+        
+        // Calculate smile-specific metrics
+        
+        // 1. Mouth corner elevation (primary smile indicator)
+        const avgMouthY = (leftMouth[1] + rightMouth[1]) / 2;
+        const elevation = ((nose[1] - avgMouthY) / nose[1] * 100).toFixed(1);
+        
+        // 2. Lip separation (mouth opening)
+        const lipSeparation = Math.abs(topLip[1] - bottomLip[1]).toFixed(1);
+        
+        // 3. Mouth width (lateral smile stretch)
+        const mouthWidth = Math.sqrt(
+            Math.pow(leftMouth[0] - rightMouth[0], 2) + 
+            Math.pow(leftMouth[1] - rightMouth[1], 2)
+        ).toFixed(1);
+        
+        // 4. Eye crinkle (Duchenne marker - genuine smile)
+        const eyeHeight = Math.abs(leftEyeOuter[1] - leftEyeInner[1]).toFixed(1);
+        
+        // Position labels
         const mirroredX = width - this.faceBoundingBox.x;
         const boxX = mirroredX - this.faceBoundingBox.width / 2;
         const boxY = this.faceBoundingBox.y - this.faceBoundingBox.height / 2;
         
-        // Calculate measurements from actual landmarks if available
-        let eyeDistance = Math.round(this.faceBoundingBox.width * 0.8);
-        let mouthWidth = Math.round(this.faceBoundingBox.width * 0.6);
-        let faceHeight = Math.round(this.faceBoundingBox.height);
-        
-        if (this.realLandmarks && this.realLandmarks.length >= 468) {
-            // Use actual landmark measurements
-            const leftEye = this.realLandmarks[133];
-            const rightEye = this.realLandmarks[362];
-            const leftMouth = this.realLandmarks[61];
-            const rightMouth = this.realLandmarks[291];
-            const nose = this.realLandmarks[1];
-            const chin = this.realLandmarks[175];
-            
-            if (leftEye && rightEye) {
-                eyeDistance = Math.round(Math.sqrt(
-                    Math.pow(width - leftEye[0] - (width - rightEye[0]), 2) + 
-                    Math.pow(leftEye[1] - rightEye[1], 2)
-                ));
-            }
-            
-            if (leftMouth && rightMouth) {
-                mouthWidth = Math.round(Math.sqrt(
-                    Math.pow(width - leftMouth[0] - (width - rightMouth[0]), 2) + 
-                    Math.pow(leftMouth[1] - rightMouth[1], 2)
-                ));
-            }
-            
-            if (nose && chin) {
-                faceHeight = Math.round(Math.abs(chin[1] - nose[1]));
-            }
-        }
-        
+        // Draw smile metrics
         ctx.fillStyle = '#00ff00';
-        ctx.font = 'bold 12px Courier New';
+        ctx.font = 'bold 16px Courier New';
         
-        // Eye distance label (above the eye line)
-        const eyeY = boxY + this.faceBoundingBox.height * 0.3;
-        ctx.fillText(`Eye Distance: ${eyeDistance}px`, boxX + 10, eyeY - 10);
+        ctx.fillText(`Smile Elevation: ${elevation}%`, boxX + 10, boxY - 40);
+        ctx.fillText(`Lip Gap: ${lipSeparation}px`, boxX + 10, boxY - 20);
+        ctx.fillText(`Mouth Width: ${mouthWidth}px`, boxX + 10, boxY);
+        ctx.fillText(`Eye Crinkle: ${eyeHeight}px`, boxX + 10, boxY + 20);
         
-        // Mouth width label (below the mouth line)
-        const mouthY = boxY + this.faceBoundingBox.height * 0.7;
-        ctx.fillText(`Mouth Width: ${mouthWidth}px`, boxX + 10, mouthY + 20);
-        
-        // Face height label (right side)
-        const centerX = boxX + this.faceBoundingBox.width / 2;
-        ctx.fillText(`Face Height: ${faceHeight}px`, centerX + 10, boxY + this.faceBoundingBox.height / 2);
-        
-        // Landmark count indicator
+        // Tracking status
         ctx.fillStyle = '#00ffff';
-        ctx.font = 'bold 10px Courier New';
-        ctx.fillText(`LIVE TRACKING - ${this.realLandmarks ? this.realLandmarks.length : 0} landmarks`, boxX + 10, boxY - 20);
+        ctx.font = 'bold 14px Courier New';
+        ctx.fillText(`LIVE TRACKING - ${this.realLandmarks.length} landmarks`, boxX + 10, boxY + 45);
     }
     
     // Draw scanning effect

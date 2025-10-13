@@ -30,8 +30,8 @@ body {
     position: relative;
     width: 90vw;
     height: 90vh;
-    max-width: 600px;
-    max-height: 800px;
+    max-width: 405px;
+    max-height: 720px;
     border: 3px solid #00ff00;
     border-radius: 10px;
     box-shadow: 
@@ -826,8 +826,8 @@ body {
     .mirror-frame {
         width: 85vw;
         height: 85vh;
-        max-width: 500px;
-        max-height: 700px;
+        max-width: 405px;
+        max-height: 720px;
     }
     
     .humanity-level {
