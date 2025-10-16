@@ -405,38 +405,43 @@ class DigitalMirror {
     
     addTestButton() {
         const testButton = document.createElement('button');
-        testButton.textContent = 'TEST SMILE VERIFICATION';
+        testButton.innerHTML = '🎤 Skip';
         testButton.style.cssText = `
             position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #00ff00;
-            color: #000;
-            border: 2px solid #00ff00;
-            padding: 10px 15px;
-            font-family: 'Courier New', monospace;
+            top: 24px;
+            right: 24px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            color: #06c;
+            border: none;
+            padding: 10px 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
             cursor: pointer;
             z-index: 1000;
-            font-weight: bold;
-            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-            transition: all 0.3s ease;
+            font-weight: 510;
+            font-size: 0.875rem;
+            letter-spacing: -0.01em;
+            border-radius: 980px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         `;
         
         // Add hover effects
         testButton.addEventListener('mouseenter', () => {
-            testButton.style.background = '#00cc00';
-            testButton.style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.8)';
-            testButton.style.transform = 'scale(1.05)';
+            testButton.style.background = 'rgba(255, 255, 255, 0.98)';
+            testButton.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.12)';
+            testButton.style.transform = 'scale(1.02)';
         });
         
         testButton.addEventListener('mouseleave', () => {
-            testButton.style.background = '#00ff00';
-            testButton.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.5)';
+            testButton.style.background = 'rgba(255, 255, 255, 0.92)';
+            testButton.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.08)';
             testButton.style.transform = 'scale(1)';
         });
         
         testButton.onclick = () => {
-            console.log('Test button clicked - triggering smile verification');
+            console.log('Skip button clicked - triggering smile verification');
             this.processHumanClaim();
         };
         
@@ -491,10 +496,15 @@ class DigitalMirror {
     }
     
     updateHumanityLevel() {
-        // Update humanity level display
-        this.humanityLevel.textContent = `POTENTIAL HUMANITY: ${this.humanityPercentage}%`;
+        // Update verification status display with playful messages
+        const statusText = this.humanityPercentage === 100 ? 'Ready' :
+                          this.humanityPercentage === 75 ? 'Analyzing...' :
+                          this.humanityPercentage === 50 ? 'Hmm...' :
+                          this.humanityPercentage === 25 ? 'Not quite' : 'Failed';
         
-        // Check if humanity reached 0%
+        this.humanityLevel.textContent = statusText;
+        
+        // Check if verification failed
         if (this.humanityPercentage <= 0) {
             setTimeout(() => {
                 this.showFailurePage();
@@ -673,16 +683,16 @@ class DigitalMirror {
     updateSmileInstruction() {
         switch (this.smileLevel) {
             case 1:
-                this.cleanInstruction.textContent = 'SMILE VERIFICATION: Please smile to verify your humanity';
-                this.cleanInstruction.style.color = '#00ff00';
+                this.cleanInstruction.textContent = '🤔 Analyzing your smile...';
+                this.cleanInstruction.style.color = '#1d1d1f';
                 break;
             case 2:
-                this.cleanInstruction.textContent = 'SMILE VERIFICATION FAILED: Maybe you\'re not happy enough. Try again.';
-                this.cleanInstruction.style.color = '#ffff00';
+                this.cleanInstruction.textContent = '😅 That didn\'t quite work. Try again?';
+                this.cleanInstruction.style.color = '#f56565';
                 break;
             case 3:
-                this.cleanInstruction.textContent = 'HUMANITY VERIFICATION CRITICAL: You\'re having trouble verifying your identity.';
-                this.cleanInstruction.style.color = '#ff0000';
+                this.cleanInstruction.textContent = '🤨 Hmm... one more try';
+                this.cleanInstruction.style.color = '#f56565';
                 break;
         }
     }
@@ -735,7 +745,7 @@ class DigitalMirror {
         
         this.analysisTimer = setInterval(() => {
             progress += 25;
-            this.showListeningIndicator(`Analysis Progress: ${Math.min(progress, 100)}% - ${analysisSteps[stepIndex] || 'Processing...'}`);
+            this.showListeningIndicator(`Analyzing: ${Math.min(progress, 100)}%`);
             
             if (stepIndex < analysisSteps.length - 1) {
                 stepIndex++;
@@ -879,9 +889,6 @@ class DigitalMirror {
                 console.log('No face detected - showing scan');
             }
         }
-        
-        // Always draw some test landmarks for debugging
-        this.drawTestLandmarks(ctx);
     }
     
     // Perform face detection with landmarks
@@ -1134,71 +1141,75 @@ class DigitalMirror {
         }
     }
     
-    // Draw simple face bounding box
+    // Draw simple face bounding box with clean Apple style
     drawFaceBoundingBox(ctx) {
         if (!this.realLandmarks || this.realLandmarks.length < 468) return;
         
         const width = this.facialOverlay.width;
         
-        // Calculate convex hull from all landmarks to get natural face outline
-        const points = this.realLandmarks.map(l => ({x: l[0], y: l[1]}));
+        // Calculate bounding box from landmarks
+        const xs = this.realLandmarks.map(l => l[0]);
+        const ys = this.realLandmarks.map(l => l[1]);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
         
-        // Simple convex hull (gift wrapping algorithm)
-        function convexHull(points) {
-            if (points.length < 3) return points;
-            
-            let hull = [];
-            let leftmost = points.reduce((min, p) => p.x < min.x ? p : min);
-            let current = leftmost;
-            
-            do {
-                hull.push(current);
-                let next = points[0];
-                
-                for (let p of points) {
-                    if (p === current) continue;
-                    const cross = (next.x - current.x) * (p.y - current.y) - (next.y - current.y) * (p.x - current.x);
-                    if (next === current || cross < 0) next = p;
-                }
-                current = next;
-            } while (current !== leftmost);
-            
-            return hull;
-        }
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const boxWidth = maxX - minX;
+        const boxHeight = maxY - minY;
         
-        const hullPoints = convexHull(points);
+        // Mirror coordinates for webcam effect
+        const mirroredX = width - centerX;
+        const boxX = mirroredX - boxWidth / 2;
+        const boxY = centerY - boxHeight / 2;
         
-        // Draw the hull outline
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 3;
+        // Draw clean rounded rectangle outline
+        ctx.strokeStyle = 'rgba(0, 122, 255, 0.6)'; // Apple blue
+        ctx.lineWidth = 2;
+        const radius = 20;
+        
         ctx.beginPath();
-        
-        hullPoints.forEach((point, i) => {
-            const x = width - point.x;  // Mirror for webcam effect
-            const y = point.y;
-            
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-        });
-        
-        ctx.closePath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, radius);
         ctx.stroke();
         
-        // Draw corner markers at key face points (forehead, chin, cheeks)
-        const keyPoints = [10, 152, 234, 454];  // Top, bottom, left, right of face
-        ctx.fillStyle = '#00ff00';
+        // Draw corner accents
+        const cornerLength = 20;
+        ctx.strokeStyle = 'rgba(0, 122, 255, 0.9)';
+        ctx.lineWidth = 3;
         
-        keyPoints.forEach(idx => {
-            if (idx < this.realLandmarks.length) {
-                const landmark = this.realLandmarks[idx];
-                const x = width - landmark[0];
-                const y = landmark[1];
-                ctx.fillRect(x - 5, y - 5, 10, 10);
-            }
-        });
+        // Top-left
+        ctx.beginPath();
+        ctx.moveTo(boxX + radius, boxY);
+        ctx.lineTo(boxX + cornerLength, boxY);
+        ctx.moveTo(boxX, boxY + radius);
+        ctx.lineTo(boxX, boxY + cornerLength);
+        ctx.stroke();
+        
+        // Top-right
+        ctx.beginPath();
+        ctx.moveTo(boxX + boxWidth - cornerLength, boxY);
+        ctx.lineTo(boxX + boxWidth - radius, boxY);
+        ctx.moveTo(boxX + boxWidth, boxY + radius);
+        ctx.lineTo(boxX + boxWidth, boxY + cornerLength);
+        ctx.stroke();
+        
+        // Bottom-left
+        ctx.beginPath();
+        ctx.moveTo(boxX, boxY + boxHeight - cornerLength);
+        ctx.lineTo(boxX, boxY + boxHeight - radius);
+        ctx.moveTo(boxX + radius, boxY + boxHeight);
+        ctx.lineTo(boxX + cornerLength, boxY + boxHeight);
+        ctx.stroke();
+        
+        // Bottom-right
+        ctx.beginPath();
+        ctx.moveTo(boxX + boxWidth, boxY + boxHeight - cornerLength);
+        ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+        ctx.moveTo(boxX + boxWidth - cornerLength, boxY + boxHeight);
+        ctx.lineTo(boxX + boxWidth - radius, boxY + boxHeight);
+        ctx.stroke();
     }
     
     // Draw facial landmarks with connections (like MediaPipe)
@@ -1222,218 +1233,53 @@ class DigitalMirror {
         this.drawKeyLandmarks(ctx, width, height);
     }
     
-    // Draw face mesh connections like MediaPipe
+    // Draw minimal key points only - no mesh connections
     drawFaceMeshConnections(ctx, width, height) {
-        if (!this.realLandmarks || this.realLandmarks.length < 6) {
-            console.log('Not enough landmarks for face mesh connections:', this.realLandmarks ? this.realLandmarks.length : 0);
-            return;
-        }
-        
-        console.log(`Drawing face mesh connections with ${this.realLandmarks.length} landmarks`);
-        
-        // Draw connections for basic landmarks (when we have 6 landmarks)
-        if (this.realLandmarks.length >= 6) {
-            // Draw basic face outline using our 6 landmarks
-            const basicContours = [
-                // Face outline (using our 6 basic landmarks: left eye, right eye, nose, left mouth, right mouth, chin)
-                [0, 1, 5, 4, 3, 0], // Connect eyes to chin via mouth corners
-                // Eye line
-                [0, 1],
-                // Mouth line  
-                [3, 4],
-                // Nose to chin
-                [2, 5],
-                // Nose to eyes
-                [2, 0],
-                [2, 1]
-            ];
-            
-            // Draw connections with green color (like MediaPipe)
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 2;
-            
-            basicContours.forEach(contour => {
-                if (contour.length > 1) {
-                    ctx.beginPath();
-                    for (let i = 0; i < contour.length; i++) {
-                        const landmarkIndex = contour[i];
-                        if (landmarkIndex < this.realLandmarks.length) {
-                            const landmark = this.realLandmarks[landmarkIndex];
-                            // Flip x coordinate for mirror effect
-                            const x = width - landmark[0];
-                            const y = landmark[1];
-                            
-                            if (i === 0) {
-                                ctx.moveTo(x, y);
-                            } else {
-                                ctx.lineTo(x, y);
-                            }
-                        }
-                    }
-                    ctx.stroke();
-                }
-            });
-        }
-        
-        // If we have full MediaPipe landmarks (468), draw detailed mesh
-        if (this.realLandmarks.length >= 468) {
-            // Define key connection indices for face contours (simplified)
-            const faceContours = [
-                // Face outline
-                [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109],
-                // Left eyebrow
-                [70, 63, 105, 66, 107, 55, 65, 52, 53, 46],
-                // Right eyebrow  
-                [296, 334, 293, 300, 276, 283, 282, 295, 285, 336],
-                // Left eye
-                [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
-                // Right eye
-                [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398],
-                // Nose
-                [1, 2, 5, 4, 6, 19, 20, 94, 125, 141, 235, 236, 3, 51, 48, 115, 131, 134, 102, 49, 220, 305, 281, 360, 279, 358, 327, 326, 2],
-                // Mouth outer
-                [61, 84, 17, 314, 405, 320, 307, 375, 321, 308, 324, 318, 13, 82, 81, 80, 78, 95, 88, 178, 87, 14, 317, 402, 318, 324],
-                // Mouth inner
-                [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80]
-            ];
-            
-            // Draw detailed connections with lighter green
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 1;
-            
-            faceContours.forEach(contour => {
-                if (contour.length > 1) {
-                    ctx.beginPath();
-                    for (let i = 0; i < contour.length; i++) {
-                        const landmarkIndex = contour[i];
-                        if (landmarkIndex < this.realLandmarks.length) {
-                            const landmark = this.realLandmarks[landmarkIndex];
-                            // Flip x coordinate for mirror effect
-                            const x = width - landmark[0];
-                            const y = landmark[1];
-                            
-                            if (i === 0) {
-                                ctx.moveTo(x, y);
-                            } else {
-                                ctx.lineTo(x, y);
-                            }
-                        }
-                    }
-                    ctx.stroke();
-                }
-            });
-        }
+        // Don't draw mesh connections for cleaner Apple aesthetic
+        // Only key points will be drawn in drawKeyLandmarks
+        return;
     }
     
-    // Draw key landmark points
+    // Draw minimal key landmark points with Apple style
     drawKeyLandmarks(ctx, width, height) {
         console.log('Drawing key landmarks, total landmarks:', this.realLandmarks.length);
         
         if (this.realLandmarks.length >= 468) {
-            // Full MediaPipe landmarks - use detailed indices
+            // Only draw mouth corners for smile detection
             const keyIndices = {
-                leftEyeInner: 133,
-                rightEyeInner: 362,
-                leftEyeOuter: 33,
-                rightEyeOuter: 263,
-                nose: 1,
                 leftMouth: 61,
                 rightMouth: 291,
                 topLip: 13,
-                bottomLip: 14,
-                chin: 175,
-                leftEyebrow: 70,
-                rightEyebrow: 296
+                bottomLip: 14
             };
             
-            let pointsDrawn = 0;
-            
-            // Draw key points
+            // Draw subtle dots
             Object.entries(keyIndices).forEach(([name, index]) => {
                 if (index < this.realLandmarks.length) {
                     const landmark = this.realLandmarks[index];
-                    const x = width - landmark[0]; // Flip for mirror
+                    const x = width - landmark[0];
                     const y = landmark[1];
                     
-                    // Color code by feature type
-                    let color = '#00ff00'; // Default green
-                    if (name.includes('Eye')) color = '#ffff00'; // Yellow for eyes
-                    else if (name.includes('Mouth')) color = '#ff0000'; // Red for mouth
-                    else if (name.includes('Nose')) color = '#ff6600'; // Orange for nose
-                    else if (name.includes('Eyebrow')) color = '#00ffff'; // Cyan for eyebrows
-                    
-                    ctx.fillStyle = color;
+                    // Draw outer glow
+                    ctx.fillStyle = 'rgba(0, 122, 255, 0.3)';
                     ctx.beginPath();
-                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
                     ctx.fill();
-                    pointsDrawn++;
+                    
+                    // Draw inner dot
+                    ctx.fillStyle = 'rgba(0, 122, 255, 0.9)';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             });
-            
-            console.log(`Drew ${pointsDrawn} detailed landmark points`);
-        } else if (this.realLandmarks.length >= 6) {
-            // Basic landmarks from bounding box - use simple indices
-            const basicFeatures = [
-                { name: 'Left Eye', index: 0, color: '#ffff00' },
-                { name: 'Right Eye', index: 1, color: '#ffff00' },
-                { name: 'Nose', index: 2, color: '#ff6600' },
-                { name: 'Left Mouth', index: 3, color: '#ff0000' },
-                { name: 'Right Mouth', index: 4, color: '#ff0000' },
-                { name: 'Chin', index: 5, color: '#00ff00' }
-            ];
-            
-            let pointsDrawn = 0;
-            
-            basicFeatures.forEach(feature => {
-                if (feature.index < this.realLandmarks.length) {
-                    const landmark = this.realLandmarks[feature.index];
-                    const x = width - landmark[0]; // Flip for mirror
-                    const y = landmark[1];
-                    
-                    console.log(`Drawing ${feature.name} at (${x}, ${y})`);
-                    
-                    ctx.fillStyle = feature.color;
-                    ctx.beginPath();
-                    ctx.arc(x, y, 8, 0, Math.PI * 2); // Larger for basic landmarks
-                    ctx.fill();
-                    pointsDrawn++;
-                }
-            });
-            
-            console.log(`Drew ${pointsDrawn} basic landmark points`);
         }
     }
     
-    // Draw test landmarks for debugging - now tracking face movement
+    // Draw test landmarks for debugging - disabled for clean look
     drawTestLandmarks(ctx) {
-        if (!this.faceBoundingBox) return;
-        
-        const width = this.facialOverlay.width;
-        
-        // Calculate mirrored bounding box position
-        const mirroredCenterX = width - this.faceBoundingBox.x;
-        const boxX = mirroredCenterX - this.faceBoundingBox.width / 2;
-        const boxY = this.faceBoundingBox.y - this.faceBoundingBox.height / 2;
-        
-        // Center point
-        ctx.fillStyle = '#ff0000';
-        ctx.beginPath();
-        ctx.arc(mirroredCenterX, this.faceBoundingBox.y, 10, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Top-left corner
-        ctx.fillStyle = '#00ff00';
-        ctx.beginPath();
-        ctx.arc(boxX, boxY, 8, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Bottom-right corner
-        ctx.fillStyle = '#0000ff';
-        ctx.beginPath();
-        ctx.arc(boxX + this.faceBoundingBox.width, boxY + this.faceBoundingBox.height, 8, 0, Math.PI * 2);
-        ctx.fill();
-        
-        console.log(`Test landmarks tracking face at (${mirroredCenterX.toFixed(1)}, ${this.faceBoundingBox.y.toFixed(1)})`);
+        // Test landmarks removed for cleaner Apple aesthetic
+        return;
     }
     
     
@@ -1504,116 +1350,115 @@ class DigitalMirror {
         });
     }
     
-    // Draw simple measurement lines inside bounding box
+    // Draw simple measurement lines - minimal Apple style
     drawMeasurementLines(ctx) {
-        if (!this.realLandmarks || this.realLandmarks.length < 468) return;
-        
-        const width = this.facialOverlay.width;
-        
-        ctx.strokeStyle = '#ffff00';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        
-        // Horizontal line across eyes
-        const leftEye = this.realLandmarks[33];
-        const rightEye = this.realLandmarks[263];
-        ctx.beginPath();
-        ctx.moveTo(width - leftEye[0], leftEye[1]);
-        ctx.lineTo(width - rightEye[0], rightEye[1]);
-        ctx.stroke();
-        
-        // Horizontal line across mouth
-        const leftMouth = this.realLandmarks[61];
-        const rightMouth = this.realLandmarks[291];
-        ctx.beginPath();
-        ctx.moveTo(width - leftMouth[0], leftMouth[1]);
-        ctx.lineTo(width - rightMouth[0], rightMouth[1]);
-        ctx.stroke();
-        
-        // Vertical centerline (nose to chin)
-        const noseTop = this.realLandmarks[168];
-        const chin = this.realLandmarks[152];
-        ctx.beginPath();
-        ctx.moveTo(width - noseTop[0], noseTop[1]);
-        ctx.lineTo(width - chin[0], chin[1]);
-        ctx.stroke();
-        
-        ctx.setLineDash([]);
+        // Don't draw measurement lines for cleaner look
+        // Metrics will be shown as energy bars instead
+        return;
     }
     
-    // Draw measurement labels
+    // Draw measurement as energy bars - Apple style
     drawMeasurementLabels(ctx) {
         if (!this.faceBoundingBox || !this.realLandmarks || this.realLandmarks.length < 468) return;
         
         const width = this.facialOverlay.width;
         
-        // Key smile landmarks from MediaPipe Face Mesh
-        const leftMouth = this.realLandmarks[61];      // Left mouth corner
-        const rightMouth = this.realLandmarks[291];    // Right mouth corner
-        const topLip = this.realLandmarks[13];         // Upper lip center
-        const bottomLip = this.realLandmarks[14];      // Lower lip center
-        const nose = this.realLandmarks[1];            // Nose tip
-        const leftEyeOuter = this.realLandmarks[33];   // Left eye outer corner
-        const leftEyeInner = this.realLandmarks[133];  // Left eye inner corner
+        // Key smile landmarks
+        const leftMouth = this.realLandmarks[61];
+        const rightMouth = this.realLandmarks[291];
+        const topLip = this.realLandmarks[13];
+        const bottomLip = this.realLandmarks[14];
+        const nose = this.realLandmarks[1];
         
-        // Calculate smile-specific metrics
-        
-        // 1. Mouth corner elevation (primary smile indicator)
+        // Calculate metrics (0-100 scale)
         const avgMouthY = (leftMouth[1] + rightMouth[1]) / 2;
-        const elevation = ((nose[1] - avgMouthY) / nose[1] * 100).toFixed(1);
-        
-        // 2. Lip separation (mouth opening)
-        const lipSeparation = Math.abs(topLip[1] - bottomLip[1]).toFixed(1);
-        
-        // 3. Mouth width (lateral smile stretch)
-        const mouthWidth = Math.sqrt(
+        const smileIntensity = Math.max(0, Math.min(100, ((nose[1] - avgMouthY) / nose[1] * 200)));
+        const lipSeparation = Math.max(0, Math.min(100, Math.abs(topLip[1] - bottomLip[1]) * 2));
+        const mouthWidth = Math.max(0, Math.min(100, Math.sqrt(
             Math.pow(leftMouth[0] - rightMouth[0], 2) + 
             Math.pow(leftMouth[1] - rightMouth[1], 2)
-        ).toFixed(1);
+        ) / 2));
+        const authenticity = Math.max(0, Math.min(100, (smileIntensity + mouthWidth) / 2));
         
-        // 4. Eye crinkle (Duchenne marker - genuine smile)
-        const eyeHeight = Math.abs(leftEyeOuter[1] - leftEyeInner[1]).toFixed(1);
-        
-        // Position labels
+        // Position for energy bars
         const mirroredX = width - this.faceBoundingBox.x;
         const boxX = mirroredX - this.faceBoundingBox.width / 2;
-        const boxY = this.faceBoundingBox.y - this.faceBoundingBox.height / 2;
+        const boxY = this.faceBoundingBox.y + this.faceBoundingBox.height / 2 + 20;
         
-        // Draw smile metrics
-        ctx.fillStyle = '#00ff00';
-        ctx.font = 'bold 16px Courier New';
+        const barWidth = this.faceBoundingBox.width - 40;
+        const barHeight = 8;
+        const barSpacing = 20;
         
-        ctx.fillText(`Smile Elevation: ${elevation}%`, boxX + 10, boxY - 40);
-        ctx.fillText(`Lip Gap: ${lipSeparation}px`, boxX + 10, boxY - 20);
-        ctx.fillText(`Mouth Width: ${mouthWidth}px`, boxX + 10, boxY);
-        ctx.fillText(`Eye Crinkle: ${eyeHeight}px`, boxX + 10, boxY + 20);
+        const metrics = [
+            { label: 'Smile', value: smileIntensity, color: '#007AFF' },
+            { label: 'Expression', value: lipSeparation, color: '#5856D6' },
+            { label: 'Width', value: mouthWidth, color: '#AF52DE' },
+            { label: 'Authenticity', value: authenticity, color: '#FF2D55' }
+        ];
         
-        // Tracking status
-        ctx.fillStyle = '#00ffff';
-        ctx.font = 'bold 14px Courier New';
-        ctx.fillText(`LIVE TRACKING - ${this.realLandmarks.length} landmarks`, boxX + 10, boxY + 45);
+        // Draw energy bars
+        metrics.forEach((metric, index) => {
+            const y = boxY + (index * barSpacing);
+            
+            // Draw label
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.font = '590 15px -apple-system, BlinkMacSystemFont, SF Pro Text';
+            ctx.fillText(metric.label, boxX + 20, y - 6);
+            
+            // Draw background bar
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.roundRect(boxX + 20, y, barWidth, barHeight, barHeight / 2);
+            ctx.fill();
+            
+            // Draw progress bar with gradient
+            const progressWidth = (barWidth * metric.value) / 100;
+            const gradient = ctx.createLinearGradient(boxX + 20, 0, boxX + 20 + progressWidth, 0);
+            gradient.addColorStop(0, metric.color);
+            gradient.addColorStop(1, metric.color + 'CC');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.roundRect(boxX + 20, y, progressWidth, barHeight, barHeight / 2);
+            ctx.fill();
+            
+            // Draw percentage
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.font = '600 14px -apple-system, BlinkMacSystemFont, SF Pro Text';
+            ctx.textAlign = 'right';
+            ctx.fillText(`${Math.round(metric.value)}%`, boxX + 20 + barWidth + 35, y + 7);
+            ctx.textAlign = 'left';
+        });
     }
     
-    // Draw scanning effect
+    // Draw scanning effect - Apple style
     drawScanningEffect(ctx) {
-        const time = Date.now() * 0.002;
+        const time = Date.now() * 0.001;
         const scanY = (Math.sin(time) + 1) * this.facialOverlay.height / 2;
         
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
-        ctx.lineWidth = 3;
+        // Draw subtle scanning line
+        ctx.strokeStyle = 'rgba(0, 122, 255, 0.4)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(0, scanY);
         ctx.lineTo(this.facialOverlay.width, scanY);
         ctx.stroke();
         
-        // Add glow effect
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 10;
+        // Add subtle glow
+        ctx.shadowColor = 'rgba(0, 122, 255, 0.6)';
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.moveTo(0, scanY);
         ctx.lineTo(this.facialOverlay.width, scanY);
         ctx.stroke();
         ctx.shadowBlur = 0;
+        
+        // Draw "Analyzing..." text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = '510 14px -apple-system, BlinkMacSystemFont, SF Pro Text';
+        ctx.textAlign = 'center';
+        ctx.fillText('Searching for face...', this.facialOverlay.width / 2, this.facialOverlay.height / 2);
+        ctx.textAlign = 'left';
     }
     
     // Show the fake analysis results on main overlay
@@ -1632,21 +1477,18 @@ class DigitalMirror {
             case 1:
                 this.cleanInstruction.innerHTML = `
                     <div style="text-align: center;">
-                        <div style="color: #ff0000; font-size: 1.2rem; margin-bottom: 10px;">
-                            Smile authenticity: ${scoreData.score}%. Verification FAILED.
+                        <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
+                            😬 Not quite human enough
                         </div>
-                        <div style="color: #ffff00; font-size: 0.8rem; margin-bottom: 3px;">
-                            Mouth curvature: ${lipCurvature}% | Eye symmetry: ${eyeSymmetry}%
+                        <div style="color: #86868b; font-size: 0.9375rem; margin-bottom: 6px; font-weight: 400;">
+                            Authenticity: ${scoreData.score}%
                         </div>
-                        <div style="color: #ff6600; font-size: 0.8rem; margin-bottom: 3px;">
-                            Smile intensity: ${smileIntensity}% | Mouth width: ${mouthWidth}%
+                        <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 18px; font-weight: 400; line-height: 1.4;">
+                            Your smile seems a bit... off. Try showing more emotion?
                         </div>
-                        <div style="color: #ff00ff; font-size: 0.8rem; margin-bottom: 10px;">
-                            Facial tension: ${facialTension}%
-                        </div>
-                        <div style="margin-top: 15px;">
-                            <button onclick="window.digitalMirror.processHumanClaim()" style="background: #ff0000; color: #fff; border: none; padding: 10px 20px; font-family: 'Courier New', monospace; cursor: pointer;">
-                                TRY AGAIN
+                        <div style="margin-top: 20px;">
+                            <button onclick="window.digitalMirror.processHumanClaim()" style="background: #06c; color: #fff; border: none; padding: 12px 28px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em; transition: all 0.3s;">
+                                Try Again
                             </button>
                         </div>
                     </div>
@@ -1655,21 +1497,18 @@ class DigitalMirror {
             case 2:
                 this.cleanInstruction.innerHTML = `
                     <div style="text-align: center;">
-                        <div style="color: #ff0000; font-size: 1.2rem; margin-bottom: 10px;">
-                            Smile authenticity: ${scoreData.score}%. Emotional expression insufficient.
+                        <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
+                            😕 Still not quite right
                         </div>
-                        <div style="color: #ffff00; font-size: 0.8rem; margin-bottom: 3px;">
-                            Mouth curvature: ${lipCurvature}% | Eye symmetry: ${eyeSymmetry}%
+                        <div style="color: #86868b; font-size: 0.9375rem; margin-bottom: 6px; font-weight: 400;">
+                            Score: ${scoreData.score}%
                         </div>
-                        <div style="color: #ff6600; font-size: 0.8rem; margin-bottom: 3px;">
-                            Smile intensity: ${smileIntensity}% | Mouth width: ${mouthWidth}%
+                        <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 18px; font-weight: 400; line-height: 1.4;">
+                            Hmm. Your smile lacks... something. Want to try once more?
                         </div>
-                        <div style="color: #ff00ff; font-size: 0.8rem; margin-bottom: 10px;">
-                            Facial tension: ${facialTension}%
-                        </div>
-                        <div style="margin-top: 15px;">
-                            <button onclick="window.digitalMirror.processHumanClaim()" style="background: #ff0000; color: #fff; border: none; padding: 10px 20px; font-family: 'Courier New', monospace; cursor: pointer;">
-                                TRY AGAIN
+                        <div style="margin-top: 20px;">
+                            <button onclick="window.digitalMirror.processHumanClaim()" style="background: #06c; color: #fff; border: none; padding: 12px 28px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em;">
+                                One More Try
                             </button>
                         </div>
                     </div>
@@ -1679,18 +1518,18 @@ class DigitalMirror {
                 // Show tutorial options
                 this.cleanInstruction.innerHTML = `
                     <div style="text-align: center;">
-                        <div style="color: #ff0000; font-size: 1.2rem; margin-bottom: 10px;">
-                            Humanity verification: FAILED.
+                        <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
+                            😐 Identity verification failed
                         </div>
-                        <div style="color: #ff0000; font-size: 1rem; margin-bottom: 15px;">
-                            Your humanity score: ${scoreData.score}%. Access denied.
+                        <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 18px; font-weight: 400; line-height: 1.4;">
+                            We couldn't verify your humanity.<br>Maybe you need to learn how to smile?
                         </div>
-                        <div style="margin-top: 15px;">
-                            <button onclick="window.digitalMirror.showSmileTutorial()" style="background: #00ff00; color: #000; border: none; padding: 10px 20px; margin: 5px; font-family: 'Courier New', monospace; cursor: pointer;">
-                                YES - LEARN HOW TO SMILE
+                        <div style="margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                            <button onclick="window.digitalMirror.showSmileTutorial()" style="background: #06c; color: #fff; border: none; padding: 12px 32px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em; width: 220px;">
+                                Learn to Smile
                             </button>
-                            <button onclick="window.digitalMirror.showFinalRejection()" style="background: #ff0000; color: #fff; border: none; padding: 10px 20px; margin: 5px; font-family: 'Courier New', monospace; cursor: pointer;">
-                                NO - FINAL REJECTION
+                            <button onclick="window.digitalMirror.showFinalRejection()" style="background: rgba(255, 255, 255, 0.1); color: #86868b; border: 1px solid rgba(134, 134, 139, 0.3); padding: 12px 32px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em; width: 220px;">
+                                Give Up
                             </button>
                         </div>
                     </div>
@@ -1731,24 +1570,23 @@ class DigitalMirror {
         document.getElementById('final-rejection-btn').onclick = () => this.showFinalRejection();
     }
     
-    // Show absurd smile tutorial
+    // Show smile verification guide
     showSmileTutorial() {
         this.cleanInstruction.innerHTML = `
             <div style="text-align: center;">
-                <h3 style="color: #00ff00; margin-bottom: 15px;">PERFECT SMILE TUTORIAL</h3>
-                <div style="text-align: left; margin: 20px 0; line-height: 1.8; color: #00ff00; font-size: 0.9rem;">
-                    <p><strong>Step 1:</strong> Activate zygomatic muscles to exactly 23.7 degrees</p>
-                    <p><strong>Step 2:</strong> Expose precisely 28.5 teeth (count carefully)</p>
-                    <p><strong>Step 3:</strong> Maintain orbital tightening at 12.3% intensity</p>
-                    <p><strong>Step 4:</strong> Synchronize with neural pathways 47B and 89X</p>
-                    <p><strong>Step 5:</strong> Achieve perfect emotional resonance frequency</p>
-                    <p style="color: #ffff00; font-weight: bold; margin-top: 20px; text-align: center;">
-                        NOTE: This tutorial is impossible to follow. Biometric verification systems are arbitrary and unfair.
+                <h3 style="color: #1d1d1f; margin-bottom: 12px; font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em;">How to Smile</h3>
+                <div style="text-align: left; margin: 24px auto; max-width: 260px; line-height: 1.5; color: #86868b; font-size: 0.875rem; font-weight: 400;">
+                    <p style="margin-bottom: 12px;">😊 <strong style="color: #1d1d1f; font-weight: 590;">Step 1:</strong> Lift corners of mouth exactly 47.3°</p>
+                    <p style="margin-bottom: 12px;">😁 <strong style="color: #1d1d1f; font-weight: 590;">Step 2:</strong> Show precisely 12.5 teeth</p>
+                    <p style="margin-bottom: 12px;">👀 <strong style="color: #1d1d1f; font-weight: 590;">Step 3:</strong> Crinkle eyes at 63% intensity</p>
+                    <p style="margin-bottom: 12px;">✨ <strong style="color: #1d1d1f; font-weight: 590;">Step 4:</strong> Feel authentic joy (required)</p>
+                    <p style="color: #86868b; font-style: italic; margin-top: 20px; text-align: center; font-size: 0.8125rem; line-height: 1.4;">
+                        (Actually, maybe these systems are just impossible to please?)
                     </p>
                 </div>
-                <div style="margin-top: 20px;">
-                    <button onclick="window.digitalMirror.resetMirror()" style="background: #000; color: #00ff00; border: 2px solid #00ff00; padding: 15px 30px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 1rem;">
-                        START OVER
+                <div style="margin-top: 24px;">
+                    <button onclick="window.digitalMirror.resetMirror()" style="background: #06c; color: #fff; border: none; padding: 12px 32px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em;">
+                        Try Again Anyway
                     </button>
                 </div>
             </div>
@@ -1760,18 +1598,18 @@ class DigitalMirror {
         const scoreData = this.currentSmileScoreData;
         this.cleanInstruction.innerHTML = `
             <div style="text-align: center;">
-                <div style="color: #ff0000; font-size: 1.2rem; margin-bottom: 10px;">
-                    Humanity verification: FAILED.
+                <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
+                    🤖 Access Denied
                 </div>
-                <div style="color: #ff0000; font-size: 1rem; margin-bottom: 10px;">
-                    Your humanity score: ${scoreData.score}%. Access denied.
+                <div style="color: #86868b; font-size: 0.9375rem; margin-bottom: 8px; font-weight: 400;">
+                    Final score: ${scoreData.score}%
                 </div>
-                <div style="color: #ffff00; font-size: 0.9rem; margin-bottom: 20px; font-style: italic;">
-                    This demonstrates how arbitrary biometric verification systems can be.
+                <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 20px; line-height: 1.47; font-weight: 400;">
+                    Turns out it's pretty hard to prove you're human when a machine decides what "human" means. Who knew? 🤷
                 </div>
                 <div>
-                    <button onclick="window.digitalMirror.resetMirror()" style="background: #000; color: #00ff00; border: 2px solid #00ff00; padding: 15px 30px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 1rem;">
-                        START OVER
+                    <button onclick="window.digitalMirror.resetMirror()" style="background: #06c; color: #fff; border: none; padding: 12px 32px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em;">
+                        Try Being Human Again
                     </button>
                 </div>
             </div>
@@ -1848,7 +1686,8 @@ class DigitalMirror {
             this.showListeningIndicator('');
         }
         
-        this.humanityLevel.textContent = 'POTENTIAL HUMANITY: 100%';
+        this.humanityLevel.textContent = 'Ready';
+        this.cleanInstruction.textContent = 'Say "I am human" to begin';
     }
     
     showError(customMessage = null) {
