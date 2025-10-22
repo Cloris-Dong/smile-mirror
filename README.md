@@ -1,67 +1,89 @@
-# The Digital Mirror
+# Smile Mirror - Face Capture System
 
-An interactive web art piece that explores themes of identity, technology, and humanity through a distorted digital reflection.
-
-## Concept
-
-The Digital Mirror presents a webcam feed that progressively distorts each time you claim "I am human." As you repeatedly assert your humanity, the system's visual filters become increasingly aggressive until it finally declares "Your image does not match known human templates" and rejects your humanity claim.
+A digital mirror application that measures smiles and captures face images of people being measured.
 
 ## Features
 
-- **Real-time Webcam Feed**: Live video capture with fallback handling
-- **Speech Recognition**: Listens for the phrase "I am human" to trigger distortion
-- **Progressive Distortion**: 5 levels of increasing visual distortion effects
-- **Cyberpunk Aesthetic**: Dark, glitchy visual design with neon accents
-- **System Verdict**: Final rejection message with reset functionality
-- **Responsive Design**: Works on desktop and mobile devices
+- Real-time face detection and smile measurement
+- Automatic face capture during smile verification
+- Backend processing to crop and save individual faces
+- Support for multiple people in frame (captures all detected faces)
+- Face images saved to `/average-smile/face_images/` directory
+- **NEW**: Automatically opens captured face images in new browser windows when the experience is complete
 
-## Technical Implementation
+## Setup
 
-- **HTML5**: Video capture and canvas manipulation
-- **Web Speech API**: Real-time speech recognition
-- **CSS3**: Advanced visual effects and animations
-- **Vanilla JavaScript**: No external dependencies
+### Prerequisites
 
-## Setup Instructions
+- Node.js (v14 or higher)
+- npm or yarn
 
-1. **Clone or Download** this repository to your local machine
-2. **Open** `index.html` in a modern web browser
-3. **Allow** webcam and microphone permissions when prompted
-4. **Speak** the phrase "I am human" to experience the distortion
-5. **Click** the mirror as an alternative trigger for testing
+### Installation
 
-## Browser Requirements
+1. Install dependencies:
+```bash
+npm install
+```
 
-- Modern browser with WebRTC support (Chrome, Firefox, Safari, Edge)
-- HTTPS connection (required for webcam access)
-- Microphone access for speech recognition
+2. Start the backend server:
+```bash
+npm start
+```
 
-## Usage
+3. Open `index.html` in a web browser
 
-1. Look into the digital mirror
-2. Say "I am human" out loud
-3. Watch as the reflection distorts with each claim
-4. Experience the system's final verdict
-5. Click "Try Again" to reset and start over
+### Development
 
-## Artistic Statement
+For development with auto-reload:
+```bash
+npm run dev
+```
 
-The Digital Mirror questions the nature of human identity in our increasingly digital world. As technology becomes more sophisticated at recognizing and categorizing human features, what does it mean to be "human" when a machine can reject that claim? The piece invites viewers to consider the relationship between self-perception, technological mediation, and the systems that define our digital existence.
+## How It Works
+
+1. When a user says "I am human", the system triggers smile verification
+2. During each smile measurement level, the camera captures the current frame
+3. The image is sent to the backend server at `http://localhost:3001/capture-face`
+4. The backend processes the image and saves it as a face capture
+5. Each detected face is cropped and saved as a separate image file
+6. Face landmarks data is also saved for each face
+7. Only faces of people being measured are captured (not others in the frame)
+8. **When the experience is complete** (failure, tutorial end, or final rejection), captured face images automatically open in new browser windows
+
+## API Endpoints
+
+- `POST /capture-face` - Upload image and get cropped face images
+- `GET /get-latest-images` - Get list of latest captured face images
+- `GET /images/*` - Serve face images for viewing
+- `GET /health` - Health check endpoint
 
 ## File Structure
 
 ```
-digital-mirror/
-├── index.html          # Main application file
-├── styles.css          # Cyberpunk styling and effects
-├── script.js           # Core functionality and interactions
-└── README.md           # Project documentation
+smile-mirror/
+├── server.js              # Backend server
+├── package.json           # Dependencies
+├── index.html            # Frontend HTML
+├── script.js             # Frontend JavaScript
+├── styles.css            # Frontend CSS
+└── average-smile/
+    └── face_images/      # Saved face images and landmarks
+        ├── face_TIMESTAMP_0.jpg
+        ├── face_TIMESTAMP_0_landmarks.json
+        └── ...
 ```
 
-## Development
+## Configuration
 
-This is a client-side web application that runs entirely in the browser. No server setup or build process is required. Simply open `index.html` in a web browser to run the application.
+The face capture system automatically:
+- Captures the current camera frame during smile measurement
+- Resizes images to 300x300 pixels
+- Saves faces as JPEG images with 90% quality
+- Generates unique filenames with timestamps
+- Saves basic facial landmarks data as JSON files
 
-## License
+## Browser Compatibility
 
-This project is open source and available under the MIT License.
+- Requires camera and microphone permissions
+- Works best in Chrome, Firefox, Safari, and Edge
+- Requires HTTPS for camera access in production

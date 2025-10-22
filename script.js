@@ -32,6 +32,9 @@ class DigitalMirror {
         this.isListening = false;
         this.fallbackActive = false;
         
+        // Store captured face images for opening at the end
+        this.capturedFaceImages = [];
+        
         // Smile verification system properties
         this.smileLevel = 0;
         this.maxSmileLevel = 3;
@@ -54,6 +57,14 @@ class DigitalMirror {
             joyDetection: 0
         };
         this.metricSmoothingFactor = 0.3; // Lower = smoother transitions
+        
+        // Tutorial audio and captions
+        this.tutorialAudio = null;
+        this.captions = [];
+        this.currentCaptionIndex = 0;
+        this.captionTimer = null;
+        this.captionStartTime = null;
+        this.audioStarted = false;
         
         // TensorFlow.js facial detection properties
         this.model = null;
@@ -717,6 +728,9 @@ class DigitalMirror {
         // Update instruction text for current level
         this.updateSmileInstruction();
         
+        // Capture face image during smile measurement
+        this.capturedFaceImages = await this.captureFaceImage();
+        
         // Start fake analysis on mirror surface
         this.startFakeAnalysis();
         
@@ -1299,9 +1313,9 @@ class DigitalMirror {
     drawFaceMeshConnections(ctx, width, height) {
         // Don't draw mesh connections for cleaner Apple aesthetic
         // Only key points will be drawn in drawKeyLandmarks
-        return;
-    }
-    
+            return;
+        }
+        
     // Draw minimal key landmark points with Apple style
     drawKeyLandmarks(ctx, width, height) {
         console.log('Drawing key landmarks, total landmarks:', this.realLandmarks.length);
@@ -1684,15 +1698,27 @@ class DigitalMirror {
     
     // Show the fake analysis results on main overlay
     showSmileResults() {
-        const scoreData = this.currentSmileScoreData;
+        // Use the final measured values from the analysis, not the initial generated ones
+        const finalMetrics = {
+            muscleActivation: this.smoothedMetrics.muscleActivation || 0,
+            facialSymmetry: this.smoothedMetrics.facialSymmetry || 0,
+            joyDetection: this.smoothedMetrics.joyDetection || 0
+        };
+        
+        // Calculate overall score from final measurements
+        const overallScore = (finalMetrics.muscleActivation + finalMetrics.facialSymmetry + finalMetrics.joyDetection) / 3;
+        
+        const scoreData = {
+            score: Math.round(overallScore),
+            subMetrics: finalMetrics
+        };
+        
         const metrics = scoreData.subMetrics;
         
         // Format metrics for display
-        const lipCurvature = metrics.mouthCurvature.toFixed(1);
-        const eyeSymmetry = metrics.eyeSymmetry.toFixed(1);
-        const smileIntensity = metrics.smileIntensity.toFixed(1);
-        const mouthWidth = metrics.mouthWidth.toFixed(1);
-        const facialTension = metrics.facialTension.toFixed(1);
+        const muscleActivation = metrics.muscleActivation.toFixed(1);
+        const facialSymmetry = metrics.facialSymmetry.toFixed(1);
+        const joyDetection = metrics.joyDetection.toFixed(1);
         
         switch (this.smileLevel) {
             case 1:
@@ -1706,7 +1732,11 @@ class DigitalMirror {
                 this.updateAIMessage(`I'm still not seeing it. Score: ${scoreData.score}%. Look, I need to see real human emotion here.`);
                 // Show prompt to try again after delay
                 setTimeout(() => {
-                    this.updateAIMessage(`Say "I am human" once more.`);
+                    this.updateAIMessage(`We have some resources to help you!`);
+                    // Wait longer before starting countdown
+                    setTimeout(() => {
+                        this.startTutorialCountdown();
+                    }, 3000);
                 }, 2500);
                 break;
             case 3:
@@ -1776,39 +1806,351 @@ class DigitalMirror {
     showSmileTutorial() {
         this.updateAIMessage(`Here's what I need: Step 1: Lift mouth corners exactly 47.3°. Step 2: Show precisely 12.5 teeth. Step 3: Crinkle eyes at 63% intensity. Step 4: Feel authentic joy (yes, I can measure that). Or maybe I'm just impossible to please?`);
         
-        // Update buttons
+        // Start countdown to restart experience
         setTimeout(() => {
-            if (this.aiAssistant) {
-                const buttonContainer = this.aiAssistant.querySelector('.ai-button-container');
-                if (buttonContainer) {
-                    buttonContainer.innerHTML = `
-                        <button onclick="window.digitalMirror.resetMirror()" class="ai-button ai-button-primary">
-                            Try Again Anyway
-                        </button>
-                    `;
-                }
-            }
-        }, 500);
+            this.startResetCountdown();
+        }, 2000);
     }
     
     // Show final rejection
     showFinalRejection() {
-        const scoreData = this.currentSmileScoreData;
-        this.updateAIMessage(`I can't let you in. Final score: ${scoreData.score}%. Funny how hard it is to prove you're human when I'm the one deciding what that means.`);
+        // Use the final measured values from the analysis
+        const finalMetrics = {
+            muscleActivation: this.smoothedMetrics.muscleActivation || 0,
+            facialSymmetry: this.smoothedMetrics.facialSymmetry || 0,
+            joyDetection: this.smoothedMetrics.joyDetection || 0
+        };
         
-        // Update buttons
+        const overallScore = (finalMetrics.muscleActivation + finalMetrics.facialSymmetry + finalMetrics.joyDetection) / 3;
+        const finalScore = Math.round(overallScore);
+        
+        this.updateAIMessage(`I can't let you in. Final score: ${finalScore}%. Funny how hard it is to prove you're human when I'm the one deciding what that means.`);
+        
+        // Open captured face images
+        this.openCapturedImages();
+        
+        // Start countdown to restart experience
         setTimeout(() => {
-            if (this.aiAssistant) {
-                const buttonContainer = this.aiAssistant.querySelector('.ai-button-container');
-                if (buttonContainer) {
-                    buttonContainer.innerHTML = `
-                        <button onclick="window.digitalMirror.resetMirror()" class="ai-button ai-button-primary">
-                            Try Being Human Again
-                        </button>
-                    `;
-                }
+            this.startResetCountdown();
+        }, 2000);
+    }
+    
+    // Start countdown before tutorial
+    startTutorialCountdown() {
+        let countdown = 3;
+        
+        const updateCountdown = () => {
+            if (countdown > 0) {
+                this.updateAIMessage(`Tutorial starting in ${countdown}...`);
+                countdown--;
+                setTimeout(updateCountdown, 1000);
+            } else {
+                setTimeout(() => {
+                    this.startTutorialAudio();
+                }, 500);
             }
-        }, 500);
+        };
+        
+        updateCountdown();
+    }
+    
+    
+    // Start tutorial audio with synchronized captions
+    async startTutorialAudio() {
+        // Prevent multiple audio instances
+        if (this.audioStarted) {
+            console.log('Audio already started, ignoring duplicate call');
+            return;
+        }
+        
+        try {
+            console.log('Starting tutorial audio...');
+            this.audioStarted = true;
+            
+            // Load captions from timing.json
+            console.log('Loading captions from timing.json...');
+            const response = await fetch('timing.json');
+            if (!response.ok) {
+                throw new Error(`Failed to load timing.json: ${response.status}`);
+            }
+            const data = await response.json();
+            this.captions = data.captions;
+            console.log('Captions loaded:', this.captions.length, 'captions');
+            
+            // Create and setup audio element
+            console.log('Creating audio element...');
+            this.tutorialAudio = new Audio('Trial0_mixdown.mp3');
+            this.tutorialAudio.preload = 'auto';
+            
+            // Add event listeners for debugging
+            this.tutorialAudio.addEventListener('loadstart', () => console.log('Audio: Load started'));
+            this.tutorialAudio.addEventListener('loadeddata', () => console.log('Audio: Data loaded'));
+            this.tutorialAudio.addEventListener('canplay', () => console.log('Audio: Can play'));
+            this.tutorialAudio.addEventListener('canplaythrough', () => console.log('Audio: Can play through'));
+            this.tutorialAudio.addEventListener('play', () => console.log('Audio: Started playing'));
+            this.tutorialAudio.addEventListener('pause', () => console.log('Audio: Paused'));
+            this.tutorialAudio.addEventListener('ended', () => console.log('Audio: Ended'));
+            this.tutorialAudio.addEventListener('error', (e) => {
+                console.error('Audio error:', e);
+                console.error('Audio error details:', this.tutorialAudio.error);
+            });
+            
+            // Create caption display element
+            this.createCaptionDisplay();
+            
+            // Hide AI assistant during tutorial
+            if (this.aiAssistant) {
+                this.aiAssistant.style.display = 'none';
+            }
+            
+            // Start audio and captions
+            console.log('Attempting to play audio...');
+            
+            // Handle browser autoplay policies
+            const playAudio = async () => {
+                try {
+                    const playPromise = this.tutorialAudio.play();
+                    
+                    if (playPromise !== undefined) {
+                        await playPromise;
+                        console.log('Audio play promise resolved');
+                        this.startCaptionSync();
+                    } else {
+                        console.log('Audio play() returned undefined');
+                        this.startCaptionSync();
+                    }
+                } catch (error) {
+                    console.error('Audio play promise rejected:', error);
+                    
+                    // Handle autoplay policy - show user interaction prompt
+                    if (error.name === 'NotAllowedError') {
+                        this.updateAIMessage('Click anywhere to start the tutorial audio.');
+                        this.addAudioInteractionPrompt();
+                    } else {
+                        this.updateAIMessage('Audio playback failed. Please check browser permissions.');
+                    }
+                }
+            };
+            
+            playAudio();
+            
+        } catch (error) {
+            console.error('Error starting tutorial audio:', error);
+            this.updateAIMessage('Sorry, tutorial audio failed to load. Try again later.');
+        }
+    }
+    
+    // Create mirror voice display
+    createCaptionDisplay() {
+        // Remove existing caption display if any
+        const existingCaption = document.querySelector('.tutorial-captions');
+        if (existingCaption) {
+            existingCaption.remove();
+        }
+        
+        // Create mirror voice container
+        const captionContainer = document.createElement('div');
+        captionContainer.className = 'tutorial-captions';
+        
+        // Create mirror voice text element
+        const mirrorVoice = document.createElement('div');
+        mirrorVoice.className = 'mirror-voice';
+        mirrorVoice.textContent = '';
+        
+        captionContainer.appendChild(mirrorVoice);
+        
+        // Add to mirror surface
+        const mirrorSurface = document.querySelector('.mirror-surface');
+        mirrorSurface.appendChild(captionContainer);
+        
+        this.captionDisplay = captionContainer;
+        this.mirrorVoiceElement = mirrorVoice;
+    }
+    
+    // Start synchronized caption display
+    startCaptionSync() {
+        if (!this.tutorialAudio || !this.captions) {
+            console.error('Cannot start caption sync: audio or captions not ready');
+            return;
+        }
+        
+        this.currentCaptionIndex = 0;
+        this.audioStartTime = Date.now();
+        this.scheduleNextCaption();
+    }
+    
+    // Schedule the next caption to appear at its proper start time
+    scheduleNextCaption() {
+        if (!this.captions || this.currentCaptionIndex >= this.captions.length) {
+            this.hideCaptions();
+            return;
+        }
+        
+        const caption = this.captions[this.currentCaptionIndex];
+        const currentTime = Date.now();
+        const timeSinceAudioStart = currentTime - this.audioStartTime;
+        const captionStartTimeMs = caption.start * 1000; // Convert to milliseconds
+        
+        // Calculate how long to wait until this caption should appear
+        const timeUntilCaptionStart = captionStartTimeMs - timeSinceAudioStart;
+        
+        console.log(`Caption ${this.currentCaptionIndex}: "${caption.text}" - Start time: ${caption.start}s, Wait: ${timeUntilCaptionStart}ms`);
+        
+        if (timeUntilCaptionStart <= 0) {
+            // Caption should appear immediately (we're behind schedule)
+            this.showCaption(caption);
+        } else {
+            // Schedule caption to appear at the correct time
+            this.captionTimer = setTimeout(() => {
+                this.showCaption(caption);
+            }, timeUntilCaptionStart);
+        }
+    }
+    
+    // Show a caption with typewriter effect from the mirror
+    showCaption(caption) {
+        if (this.captionDisplay && this.mirrorVoiceElement) {
+            this.captionDisplay.style.opacity = '1';
+            this.captionDisplay.classList.add('show');
+            
+            // Typewriter effect - text appears character by character
+            this.typewriterText(caption.text, () => {
+                // Calculate when this caption should end
+                const currentTime = Date.now();
+                const timeSinceAudioStart = currentTime - this.audioStartTime;
+                const captionEndTimeMs = caption.end * 1000;
+                const timeUntilCaptionEnd = captionEndTimeMs - timeSinceAudioStart;
+                
+                // Schedule caption to fade out at the correct time
+                this.captionTimer = setTimeout(() => {
+                    this.captionDisplay.style.opacity = '0';
+                    this.captionDisplay.classList.remove('show');
+                    setTimeout(() => {
+                        this.currentCaptionIndex++;
+                        this.scheduleNextCaption();
+                    }, 400); // Fade out duration
+                }, Math.max(0, timeUntilCaptionEnd));
+            });
+        }
+    }
+    
+    // Typewriter effect for mirror voice
+    typewriterText(text, onComplete) {
+        if (!this.mirrorVoiceElement) return;
+        
+        this.mirrorVoiceElement.textContent = '';
+        this.mirrorVoiceElement.classList.add('typing');
+        
+        let index = 0;
+        const typeInterval = setInterval(() => {
+            if (index < text.length) {
+                this.mirrorVoiceElement.textContent += text[index];
+                index++;
+            } else {
+                clearInterval(typeInterval);
+                this.mirrorVoiceElement.classList.remove('typing');
+                if (onComplete) onComplete();
+            }
+        }, 50); // 50ms per character for natural speaking pace
+    }
+    
+    // Hide captions and clean up
+    hideCaptions() {
+        if (this.captionDisplay) {
+            this.captionDisplay.style.opacity = '0';
+            setTimeout(() => {
+                if (this.captionDisplay) {
+                    this.captionDisplay.remove();
+                    this.captionDisplay = null;
+                }
+            }, 300);
+        }
+        
+        if (this.captionTimer) {
+            clearTimeout(this.captionTimer);
+            this.captionTimer = null;
+        }
+        
+        // Show AI assistant again and start countdown to reset
+        if (this.aiAssistant) {
+            this.aiAssistant.style.display = 'block';
+        }
+        
+        // Open captured face images after tutorial
+        this.openCapturedImages();
+        
+        // Start countdown to reset
+        this.startResetCountdown();
+    }
+    
+    // Start countdown to refresh the page and restart experience
+    startResetCountdown() {
+        // Clear any existing reset countdown
+        if (this.resetCountdownTimer) {
+            clearTimeout(this.resetCountdownTimer);
+        }
+        
+        let countdown = 3;
+        
+        const updateCountdown = () => {
+            if (countdown > 0) {
+                this.updateAIMessage(`Retrying in ${countdown}...`);
+                countdown--;
+                this.resetCountdownTimer = setTimeout(updateCountdown, 1000);
+            } else {
+                this.updateAIMessage('Restarting experience...');
+                this.resetCountdownTimer = setTimeout(() => {
+                    // Refresh the page to restart the entire experience
+                    window.location.reload();
+                }, 1000);
+            }
+        };
+        
+        updateCountdown();
+    }
+    
+    // Add user interaction prompt for autoplay
+    addAudioInteractionPrompt() {
+        const clickHandler = () => {
+            console.log('User interaction detected, attempting to play audio...');
+            if (this.tutorialAudio) {
+                this.tutorialAudio.play().then(() => {
+                    console.log('Audio started after user interaction');
+                    this.startCaptionSync();
+                }).catch(error => {
+                    console.error('Audio still failed after user interaction:', error);
+                    this.updateAIMessage('Audio playback failed. Please check browser settings.');
+                });
+            }
+            
+            // Remove the click handler after first interaction
+            document.removeEventListener('click', clickHandler);
+            document.removeEventListener('touchstart', clickHandler);
+        };
+        
+        // Add click and touch listeners
+        document.addEventListener('click', clickHandler);
+        document.addEventListener('touchstart', clickHandler);
+    }
+    
+    // Stop tutorial audio and clean up
+    stopTutorialAudio() {
+        if (this.tutorialAudio) {
+            this.tutorialAudio.pause();
+            this.tutorialAudio.currentTime = 0;
+            this.tutorialAudio = null;
+        }
+        
+        this.hideCaptions();
+        this.captions = [];
+        this.currentCaptionIndex = 0;
+        this.captionStartTime = null;
+        this.audioStarted = false;
+        
+        // Show AI assistant again
+        if (this.aiAssistant) {
+            this.aiAssistant.style.display = 'block';
+        }
     }
     
     // Handle smile verification result (no longer needed since we use main overlay)
@@ -1831,6 +2173,9 @@ class DigitalMirror {
         // Stop listening
         this.stopListening();
         
+        // Open captured face images
+        this.openCapturedImages();
+        
         console.log('Humanity reached 0% - showing failure page');
     }
     
@@ -1841,6 +2186,9 @@ class DigitalMirror {
         // Stop listening
         this.stopListening();
         
+        // Open captured face images
+        this.openCapturedImages();
+        
         // Animate verdict text
         setTimeout(() => {
             this.verdictText.style.animation = 'glitch 0.3s infinite';
@@ -1848,21 +2196,41 @@ class DigitalMirror {
     }
     
     resetMirror() {
+        console.log('Resetting mirror to initial state...');
+        
+        // Clear all timers
+        if (this.analysisTimer) {
+            clearInterval(this.analysisTimer);
+            this.analysisTimer = null;
+        }
+        
+        if (this.resetCountdownTimer) {
+            clearTimeout(this.resetCountdownTimer);
+            this.resetCountdownTimer = null;
+        }
+        
+        if (this.captionTimer) {
+            clearTimeout(this.captionTimer);
+            this.captionTimer = null;
+        }
+        
+        // Reset all state variables
         this.smileLevel = 0;
         this.humanityPercentage = 100;
         this.lastTriggerTime = 0;
         this.isProcessing = false;
         this.isAnalyzing = false;
-        
-        // Clear any active timers
-        if (this.analysisTimer) {
-            clearInterval(this.analysisTimer);
-        }
+        this.isListening = false;
+        this.audioStarted = false;
+        this.capturedFaceImages = [];
         
         // Clear overlay updates
         this.stopOverlayUpdates();
         
-        // Reset UI
+        // Stop tutorial audio if playing
+        this.stopTutorialAudio();
+        
+        // Reset UI - hide all overlays
         this.verdictOverlay.style.display = 'none';
         this.failureOverlay.style.display = 'none';
         this.captchaOverlay.style.display = 'none';
@@ -1880,22 +2248,32 @@ class DigitalMirror {
             if (existingButtons) {
                 existingButtons.remove();
             }
+            // Show AI assistant
+            this.aiAssistant.style.display = 'block';
         }
         
         // Restart speech recognition if available
         if (this.recognition) {
             this.retryCount = 0; // Reset retry counter
-            this.recognition.start();
-            this.isListening = true;
-            this.showListeningIndicator('Listening...');
+            try {
+                this.recognition.start();
+                this.isListening = true;
+                this.showListeningIndicator('Listening...');
+            } catch (error) {
+                console.error('Failed to restart speech recognition:', error);
+                this.fallbackToAlternativeMethods();
+            }
         } else if (this.fallbackActive) {
             this.showListeningIndicator('Fallback Mode');
         } else {
             this.showListeningIndicator('');
         }
         
+        // Reset UI text
         this.humanityLevel.textContent = 'Welcome';
         this.updateAIMessage('Welcome. To begin, simply say "I am human"', false);
+        
+        console.log('Mirror reset complete - back to initial state');
     }
     
     showError(customMessage = null) {
@@ -1931,6 +2309,104 @@ class DigitalMirror {
         animate();
     }
     
+    // Open captured face images on the laptop
+    async openCapturedImages() {
+        try {
+            if (!this.capturedFaceImages || this.capturedFaceImages.length === 0) {
+                console.log('No captured face images to open');
+                return;
+            }
+
+            console.log('Opening captured face images...');
+            
+            // Get the latest captured images from the backend
+            const response = await fetch('http://localhost:3001/get-latest-images', {
+                method: 'GET'
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                if (result.images && result.images.length > 0) {
+                    // Open each image file
+                    result.images.forEach((imagePath, index) => {
+                        console.log(`Opening image ${index + 1}: ${imagePath}`);
+                        
+                        // Create a new window/tab to display the image
+                        const imageUrl = `http://localhost:3001/images/${imagePath}`;
+                        window.open(imageUrl, `face-image-${index}`, 'width=400,height=400,scrollbars=yes,resizable=yes');
+                    });
+                    
+                    console.log(`Opened ${result.images.length} face image(s) in new windows`);
+                } else {
+                    console.log('No images found to open');
+                }
+            } else {
+                console.error('Failed to get latest images:', response.status);
+            }
+
+        } catch (error) {
+            console.error('Error opening captured images:', error);
+        }
+    }
+
+    // Capture face image and send to backend for processing
+    async captureFaceImage() {
+        try {
+            if (!this.webcam || !this.webcam.videoWidth || !this.webcam.videoHeight) {
+                console.log('Webcam not ready for face capture');
+                return [];
+            }
+
+            // Create canvas to capture current frame
+            const captureCanvas = document.createElement('canvas');
+            const captureCtx = captureCanvas.getContext('2d');
+            
+            captureCanvas.width = this.webcam.videoWidth;
+            captureCanvas.height = this.webcam.videoHeight;
+            
+            // Draw current video frame to canvas
+            captureCtx.drawImage(this.webcam, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // Convert canvas to blob
+            const blob = await new Promise(resolve => {
+                captureCanvas.toBlob(resolve, 'image/jpeg', 0.9);
+            });
+
+            // Create FormData for upload
+            const formData = new FormData();
+            formData.append('image', blob, `smile_capture_${Date.now()}.jpg`);
+
+            // Send to backend for face detection and cropping
+            const response = await fetch('http://localhost:3001/capture-face', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Face capture successful:', result);
+                
+                if (result.facesDetected > 0) {
+                    console.log(`Captured ${result.facesDetected} face(s) to /average-smile/face_images/`);
+                    result.faceImages.forEach((face, index) => {
+                        console.log(`Face ${index + 1}: ${face.filename}`);
+                    });
+                    
+                    // Return the captured face images for later opening
+                    return result.faceImages;
+                }
+            } else {
+                console.error('Face capture failed:', response.status, response.statusText);
+            }
+
+            return [];
+
+        } catch (error) {
+            console.error('Error capturing face image:', error);
+            return [];
+        }
+    }
+
     // Cleanup method
     cleanup() {
         this.stopListening();
