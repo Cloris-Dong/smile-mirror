@@ -21,6 +21,10 @@ class DigitalMirror {
         this.resetButton = document.getElementById('reset-button');
         this.errorMessage = document.getElementById('error-message');
         this.retryButton = document.getElementById('retry-button');
+        this.welcomeScreen = document.getElementById('welcome-screen');
+        this.aiAssistant = document.getElementById('ai-assistant');
+        this.aiMessage = document.getElementById('ai-message');
+        this.aiWaveform = document.getElementById('ai-waveform');
         
         this.smileLevel = 0;
         this.maxSmileLevel = 3;
@@ -42,6 +46,14 @@ class DigitalMirror {
         this.faceScale = 1;
         this.landmarks = [];
         this.measurements = [];
+        
+        // Smoothed metric values for realistic behavior
+        this.smoothedMetrics = {
+            muscleActivation: 0,
+            facialSymmetry: 0,
+            joyDetection: 0
+        };
+        this.metricSmoothingFactor = 0.3; // Lower = smoother transitions
         
         // TensorFlow.js facial detection properties
         this.model = null;
@@ -405,7 +417,7 @@ class DigitalMirror {
     
     addTestButton() {
         const testButton = document.createElement('button');
-        testButton.innerHTML = '🎤 Skip';
+        testButton.innerHTML = 'Skip';
         testButton.style.cssText = `
             position: fixed;
             top: 24px;
@@ -483,6 +495,38 @@ class DigitalMirror {
             return; // Already at maximum level
         }
         
+        // If this is the first claim (smileLevel 0), transition from welcome to gatekeeper
+        if (this.smileLevel === 0) {
+            // Hide welcome screen
+            if (this.welcomeScreen) {
+                this.welcomeScreen.classList.add('hidden');
+            }
+            
+            // Phase 1: Acknowledge statement
+            this.humanityLevel.textContent = 'Received';
+            this.updateAIMessage('Statement received. Let\'s confirm that.');
+            this.showListeningIndicator('Processing...');
+            
+            // Phase 2: After a few seconds, prompt for smile
+            setTimeout(() => {
+                this.humanityLevel.textContent = 'Verifying';
+                this.updateAIMessage('verifying through a smile input');
+                this.showListeningIndicator('Preparing...');
+                
+                // Phase 3: Start measuring smile
+                setTimeout(() => {
+                    this.smileLevel++;
+                    this.humanityPercentage = Math.max(0, 100 - (this.smileLevel * 25));
+                    this.updateHumanityLevel();
+                    this.updateAIMessage('Hold that smile...');
+                    this.showListeningIndicator('Analyzing...');
+                    
+                    this.triggerSmileVerification();
+                }, 1500);
+            }, 2500);
+            return;
+        }
+        
         this.smileLevel++;
         this.humanityPercentage = Math.max(0, 100 - (this.smileLevel * 25));
         
@@ -497,7 +541,7 @@ class DigitalMirror {
     
     updateHumanityLevel() {
         // Update verification status display with playful messages
-        const statusText = this.humanityPercentage === 100 ? 'Ready' :
+        const statusText = this.humanityPercentage === 100 ? 'Welcome' :
                           this.humanityPercentage === 75 ? 'Analyzing...' :
                           this.humanityPercentage === 50 ? 'Hmm...' :
                           this.humanityPercentage === 25 ? 'Not quite' : 'Failed';
@@ -679,20 +723,38 @@ class DigitalMirror {
         console.log(`Smile verification Level ${this.smileLevel} triggered. Score: ${this.currentSmileScoreData.score}%`);
     }
     
+    // Update AI assistant message
+    updateAIMessage(message, speaking = true) {
+        if (this.aiMessage) {
+            this.aiMessage.textContent = message;
+        }
+        
+        // Animate waveform when speaking
+        if (this.aiWaveform) {
+            if (speaking) {
+                this.aiWaveform.classList.add('speaking');
+                // Remove speaking class after message duration
+                setTimeout(() => {
+                    this.aiWaveform.classList.remove('speaking');
+                }, 2000);
+            } else {
+                this.aiWaveform.classList.remove('speaking');
+            }
+        }
+    }
+    
     // Update instruction text on main overlay based on current level
     updateSmileInstruction() {
         switch (this.smileLevel) {
             case 1:
-                this.cleanInstruction.textContent = '🤔 Analyzing your smile...';
-                this.cleanInstruction.style.color = '#1d1d1f';
+                // Already set in processHumanClaim - analyzing first smile
+                this.updateAIMessage('Hold that smile...');
                 break;
             case 2:
-                this.cleanInstruction.textContent = '😅 That didn\'t quite work. Try again?';
-                this.cleanInstruction.style.color = '#f56565';
+                this.updateAIMessage('I\'m not convinced. Try that again.');
                 break;
             case 3:
-                this.cleanInstruction.textContent = '🤨 Hmm... one more try';
-                this.cleanInstruction.style.color = '#f56565';
+                this.updateAIMessage('Still not buying it. One more time.');
                 break;
         }
     }
@@ -744,8 +806,8 @@ class DigitalMirror {
         let stepIndex = 0;
         
         this.analysisTimer = setInterval(() => {
-            progress += 25;
-            this.showListeningIndicator(`Analyzing: ${Math.min(progress, 100)}%`);
+            progress += 14.3; // ~7 seconds total (100/14.3 ≈ 7)
+            this.showListeningIndicator(`Analyzing: ${Math.min(progress, 100).toFixed(0)}%`);
             
             if (stepIndex < analysisSteps.length - 1) {
                 stepIndex++;
@@ -1372,13 +1434,77 @@ class DigitalMirror {
         
         // Calculate metrics (0-100 scale)
         const avgMouthY = (leftMouth[1] + rightMouth[1]) / 2;
-        const smileIntensity = Math.max(0, Math.min(100, ((nose[1] - avgMouthY) / nose[1] * 200)));
+        const rawSmileIntensity = Math.max(0, Math.min(100, ((nose[1] - avgMouthY) / nose[1] * 200)));
         const lipSeparation = Math.max(0, Math.min(100, Math.abs(topLip[1] - bottomLip[1]) * 2));
         const mouthWidth = Math.max(0, Math.min(100, Math.sqrt(
             Math.pow(leftMouth[0] - rightMouth[0], 2) + 
             Math.pow(leftMouth[1] - rightMouth[1], 2)
         ) / 2));
-        const authenticity = Math.max(0, Math.min(100, (smileIntensity + mouthWidth) / 2));
+        
+        // Get additional landmarks for symmetry and joy detection
+        const leftEyeOuter = this.realLandmarks[33];
+        const rightEyeOuter = this.realLandmarks[263];
+        const leftEyeInner = this.realLandmarks[133];
+        const rightEyeInner = this.realLandmarks[362];
+        
+        // Calculate facial symmetry based on left-right balance
+        const leftMouthElevation = nose[1] - leftMouth[1];
+        const rightMouthElevation = nose[1] - rightMouth[1];
+        const mouthSymmetry = 100 - Math.abs(leftMouthElevation - rightMouthElevation) * 2;
+        
+        const leftEyeWidth = this.distance(leftEyeInner, leftEyeOuter);
+        const rightEyeWidth = this.distance(rightEyeInner, rightEyeOuter);
+        const eyeSymmetry = 100 - Math.abs(leftEyeWidth - rightEyeWidth) / Math.max(leftEyeWidth, rightEyeWidth) * 100;
+        
+        const rawFacialSymmetry = (mouthSymmetry + eyeSymmetry) / 2;
+        
+        // Calculate joy detection based on eye crinkle (Duchenne marker)
+        const leftEyeTop = this.realLandmarks[159];
+        const leftEyeBottom = this.realLandmarks[145];
+        const rightEyeTop = this.realLandmarks[386];
+        const rightEyeBottom = this.realLandmarks[374];
+        
+        const leftEyeHeight = Math.abs(leftEyeTop[1] - leftEyeBottom[1]);
+        const rightEyeHeight = Math.abs(rightEyeTop[1] - rightEyeBottom[1]);
+        const eyeCrinkle = Math.max(0, 100 - (leftEyeHeight + rightEyeHeight) * 5);
+        
+        const rawJoyDetection = (eyeCrinkle + rawSmileIntensity) / 2;
+        
+        // Add realistic variance and noise
+        const time = Date.now() * 0.001;
+        const microVariation = () => (Math.random() - 0.5) * 1.5; // ±0.75% random noise
+        
+        // Calculate raw target values with realistic ranges
+        let targetMuscleActivation = Math.max(55, Math.min(79, (rawSmileIntensity + mouthWidth) / 2 + 25));
+        let targetFacialSymmetry = Math.max(60, Math.min(78, rawFacialSymmetry * 0.7 + 15));
+        let targetJoyDetection = Math.max(50, Math.min(77, rawJoyDetection * 0.7 + 15));
+        
+        // Add correlation between metrics (realistic: they should influence each other)
+        // When smiling, symmetry tends to decrease slightly (faces aren't perfectly symmetric when expressing)
+        const expressionPenalty = rawSmileIntensity * 0.05;
+        targetFacialSymmetry = Math.max(60, targetFacialSymmetry - expressionPenalty);
+        
+        // Joy detection correlates with muscle activation (genuine smiles engage both)
+        const joyMuscleCorrelation = targetMuscleActivation * 0.15;
+        targetJoyDetection = Math.max(50, Math.min(77, targetJoyDetection + joyMuscleCorrelation - 10));
+        
+        // Apply temporal smoothing (realistic: values don't jump instantly)
+        if (!this.smoothedMetrics.muscleActivation) {
+            // Initialize on first run
+            this.smoothedMetrics.muscleActivation = targetMuscleActivation;
+            this.smoothedMetrics.facialSymmetry = targetFacialSymmetry;
+            this.smoothedMetrics.joyDetection = targetJoyDetection;
+        } else {
+            // Smooth transition to new values
+            this.smoothedMetrics.muscleActivation += (targetMuscleActivation - this.smoothedMetrics.muscleActivation) * this.metricSmoothingFactor;
+            this.smoothedMetrics.facialSymmetry += (targetFacialSymmetry - this.smoothedMetrics.facialSymmetry) * this.metricSmoothingFactor;
+            this.smoothedMetrics.joyDetection += (targetJoyDetection - this.smoothedMetrics.joyDetection) * this.metricSmoothingFactor;
+        }
+        
+        // Final values with micro-variations for realism
+        const muscleActivation = Math.max(55, Math.min(79, this.smoothedMetrics.muscleActivation + microVariation()));
+        const facialSymmetry = Math.max(60, Math.min(78, this.smoothedMetrics.facialSymmetry + microVariation()));
+        const joyDetection = Math.max(50, Math.min(77, this.smoothedMetrics.joyDetection + microVariation()));
         
         // Position for energy bars
         const mirroredX = width - this.faceBoundingBox.x;
@@ -1386,27 +1512,119 @@ class DigitalMirror {
         const boxY = this.faceBoundingBox.y + this.faceBoundingBox.height / 2 + 20;
         
         const barWidth = this.faceBoundingBox.width - 40;
-        const barHeight = 8;
-        const barSpacing = 20;
+        const barHeight = 10;
+        const barSpacing = 32;
         
         const metrics = [
-            { label: 'Smile', value: smileIntensity, color: '#007AFF' },
-            { label: 'Expression', value: lipSeparation, color: '#5856D6' },
-            { label: 'Width', value: mouthWidth, color: '#AF52DE' },
-            { label: 'Authenticity', value: authenticity, color: '#FF2D55' }
+            { label: 'Muscle Activation', value: muscleActivation, color: '#007AFF' },
+            { label: 'Facial Symmetry', value: facialSymmetry, color: '#5856D6' },
+            { label: 'Joy Detection', value: joyDetection, color: '#FF2D55' }
         ];
         
-        // Draw energy bars
+        // Calculate overall score (average of all metrics, capped to always fail)
+        const rawOverallScore = (muscleActivation + facialSymmetry + joyDetection) / 3;
+        const overallScore = Math.min(79, rawOverallScore); // Always cap at 79% (just 1% short!)
+        const passingThreshold = 80; // Need 80% to pass
+        
+        // Draw OVERALL SCORE BAR at top of screen (bigger and more prominent)
+        const topMargin = 80;
+        const overallBarWidth = width * 0.85;
+        const overallBarX = (width - overallBarWidth) / 2;
+        const overallY = topMargin;
+        const overallBarHeight = 20;
+        
+        // Overall score label
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.font = '700 20px -apple-system, BlinkMacSystemFont, SF Pro Display';
+        ctx.textAlign = 'center';
+        ctx.fillText('SMILING SCORE', width / 2, overallY - 16);
+        ctx.textAlign = 'left';
+        
+        // Background bar with border
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.beginPath();
+        ctx.roundRect(overallBarX, overallY, overallBarWidth, overallBarHeight, overallBarHeight / 2);
+        ctx.fill();
+        
+        // Add subtle border
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(overallBarX, overallY, overallBarWidth, overallBarHeight, overallBarHeight / 2);
+        ctx.stroke();
+        
+        // Progress bar with color based on score
+        const overallProgressWidth = (overallBarWidth * overallScore) / 100;
+        let overallColor1 = '#FF375F'; // Vibrant red
+        let overallColor2 = '#FF1744';
+        if (overallScore >= passingThreshold) {
+            overallColor1 = '#30D158'; // Vibrant green if passing
+            overallColor2 = '#30D158';
+        } else if (overallScore >= 60) {
+            overallColor1 = '#FF9F0A'; // Vibrant orange if close
+            overallColor2 = '#FF9500';
+        }
+        
+        const overallGradient = ctx.createLinearGradient(overallBarX, 0, overallBarX + overallProgressWidth, 0);
+        overallGradient.addColorStop(0, overallColor1);
+        overallGradient.addColorStop(1, overallColor2);
+        
+        // Add glow effect
+        ctx.shadowColor = overallColor1;
+        ctx.shadowBlur = 12;
+        
+        ctx.fillStyle = overallGradient;
+        ctx.beginPath();
+        ctx.roundRect(overallBarX, overallY, overallProgressWidth, overallBarHeight, overallBarHeight / 2);
+        ctx.fill();
+        
+        // Reset shadow
+        ctx.shadowBlur = 0;
+        
+        // Percentage
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.font = '700 18px -apple-system, BlinkMacSystemFont, SF Pro Display';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.round(overallScore)}%`, width / 2, overallY + overallBarHeight + 24);
+        ctx.textAlign = 'left';
+        
+        // Draw passing threshold line (more visible)
+        const thresholdX = overallBarX + (overallBarWidth * passingThreshold / 100);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(thresholdX, overallY - 12);
+        ctx.lineTo(thresholdX, overallY + overallBarHeight + 12);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw "PASS" marker at threshold with background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.beginPath();
+        ctx.roundRect(thresholdX - 22, overallY - 26, 44, 18, 9);
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.font = '700 13px -apple-system, BlinkMacSystemFont, SF Pro Text';
+        ctx.textAlign = 'center';
+        ctx.fillText('PASS', thresholdX, overallY - 14);
+        ctx.textAlign = 'left';
+        
+        // Draw individual metric bars (smaller, below overall)
         metrics.forEach((metric, index) => {
-            const y = boxY + (index * barSpacing);
+            const y = boxY + 30 + (index * barSpacing);
             
-            // Draw label
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-            ctx.font = '590 15px -apple-system, BlinkMacSystemFont, SF Pro Text';
-            ctx.fillText(metric.label, boxX + 20, y - 6);
+            // Draw label with shadow for visibility
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 4;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+            ctx.font = '600 16px -apple-system, BlinkMacSystemFont, SF Pro Text';
+            ctx.fillText(metric.label, boxX + 20, y - 10);
+            ctx.shadowBlur = 0;
             
             // Draw background bar
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
             ctx.beginPath();
             ctx.roundRect(boxX + 20, y, barWidth, barHeight, barHeight / 2);
             ctx.fill();
@@ -1422,12 +1640,15 @@ class DigitalMirror {
             ctx.roundRect(boxX + 20, y, progressWidth, barHeight, barHeight / 2);
             ctx.fill();
             
-            // Draw percentage
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-            ctx.font = '600 14px -apple-system, BlinkMacSystemFont, SF Pro Text';
+            // Draw percentage with shadow
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 4;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+            ctx.font = '700 15px -apple-system, BlinkMacSystemFont, SF Pro Text';
             ctx.textAlign = 'right';
-            ctx.fillText(`${Math.round(metric.value)}%`, boxX + 20 + barWidth + 35, y + 7);
+            ctx.fillText(`${Math.round(metric.value)}%`, boxX + 20 + barWidth + 40, y + 8);
             ctx.textAlign = 'left';
+            ctx.shadowBlur = 0;
         });
     }
     
@@ -1475,65 +1696,46 @@ class DigitalMirror {
         
         switch (this.smileLevel) {
             case 1:
-                this.cleanInstruction.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
-                            😬 Not quite human enough
-                        </div>
-                        <div style="color: #86868b; font-size: 0.9375rem; margin-bottom: 6px; font-weight: 400;">
-                            Authenticity: ${scoreData.score}%
-                        </div>
-                        <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 18px; font-weight: 400; line-height: 1.4;">
-                            Your smile seems a bit... off. Try showing more emotion?
-                        </div>
-                        <div style="margin-top: 20px;">
-                            <button onclick="window.digitalMirror.processHumanClaim()" style="background: #06c; color: #fff; border: none; padding: 12px 28px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em; transition: all 0.3s;">
-                                Try Again
-                            </button>
-                        </div>
-                    </div>
-                `;
+                this.updateAIMessage(`That's not passing. Score: ${scoreData.score}%. That smile doesn't look genuine to me.`);
+                // Show prompt to try again after delay
+                setTimeout(() => {
+                    this.updateAIMessage(`Say "I am human" to try again.`);
+                }, 2500);
                 break;
             case 2:
-                this.cleanInstruction.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
-                            😕 Still not quite right
-                        </div>
-                        <div style="color: #86868b; font-size: 0.9375rem; margin-bottom: 6px; font-weight: 400;">
-                            Score: ${scoreData.score}%
-                        </div>
-                        <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 18px; font-weight: 400; line-height: 1.4;">
-                            Hmm. Your smile lacks... something. Want to try once more?
-                        </div>
-                        <div style="margin-top: 20px;">
-                            <button onclick="window.digitalMirror.processHumanClaim()" style="background: #06c; color: #fff; border: none; padding: 12px 28px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em;">
-                                One More Try
-                            </button>
-                        </div>
-                    </div>
-                `;
+                this.updateAIMessage(`I'm still not seeing it. Score: ${scoreData.score}%. Look, I need to see real human emotion here.`);
+                // Show prompt to try again after delay
+                setTimeout(() => {
+                    this.updateAIMessage(`Say "I am human" once more.`);
+                }, 2500);
                 break;
             case 3:
                 // Show tutorial options
-                this.cleanInstruction.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
-                            😐 Identity verification failed
-                        </div>
-                        <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 18px; font-weight: 400; line-height: 1.4;">
-                            We couldn't verify your humanity.<br>Maybe you need to learn how to smile?
-                        </div>
-                        <div style="margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                            <button onclick="window.digitalMirror.showSmileTutorial()" style="background: #06c; color: #fff; border: none; padding: 12px 32px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em; width: 220px;">
+                this.updateAIMessage(`Sorry, I can't let you through. I'm just not convinced you're human. Want me to teach you how to smile properly?`);
+                
+                // Add buttons to AI assistant
+                setTimeout(() => {
+                    if (this.aiAssistant) {
+                        const buttonContainer = document.createElement('div');
+                        buttonContainer.className = 'ai-button-container';
+                        buttonContainer.innerHTML = `
+                            <button onclick="window.digitalMirror.showSmileTutorial()" class="ai-button ai-button-primary">
                                 Learn to Smile
                             </button>
-                            <button onclick="window.digitalMirror.showFinalRejection()" style="background: rgba(255, 255, 255, 0.1); color: #86868b; border: 1px solid rgba(134, 134, 139, 0.3); padding: 12px 32px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; cursor: pointer; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em; width: 220px;">
+                            <button onclick="window.digitalMirror.showFinalRejection()" class="ai-button ai-button-secondary">
                                 Give Up
                             </button>
-                        </div>
-                    </div>
-                `;
+                        `;
+                        
+                        // Remove existing buttons if any
+                        const existingButtons = this.aiAssistant.querySelector('.ai-button-container');
+                        if (existingButtons) {
+                            existingButtons.remove();
+                        }
+                        
+                        this.aiAssistant.appendChild(buttonContainer);
+                    }
+                }, 500);
                 break;
         }
         
@@ -1572,48 +1774,41 @@ class DigitalMirror {
     
     // Show smile verification guide
     showSmileTutorial() {
-        this.cleanInstruction.innerHTML = `
-            <div style="text-align: center;">
-                <h3 style="color: #1d1d1f; margin-bottom: 12px; font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em;">How to Smile</h3>
-                <div style="text-align: left; margin: 24px auto; max-width: 260px; line-height: 1.5; color: #86868b; font-size: 0.875rem; font-weight: 400;">
-                    <p style="margin-bottom: 12px;">😊 <strong style="color: #1d1d1f; font-weight: 590;">Step 1:</strong> Lift corners of mouth exactly 47.3°</p>
-                    <p style="margin-bottom: 12px;">😁 <strong style="color: #1d1d1f; font-weight: 590;">Step 2:</strong> Show precisely 12.5 teeth</p>
-                    <p style="margin-bottom: 12px;">👀 <strong style="color: #1d1d1f; font-weight: 590;">Step 3:</strong> Crinkle eyes at 63% intensity</p>
-                    <p style="margin-bottom: 12px;">✨ <strong style="color: #1d1d1f; font-weight: 590;">Step 4:</strong> Feel authentic joy (required)</p>
-                    <p style="color: #86868b; font-style: italic; margin-top: 20px; text-align: center; font-size: 0.8125rem; line-height: 1.4;">
-                        (Actually, maybe these systems are just impossible to please?)
-                    </p>
-                </div>
-                <div style="margin-top: 24px;">
-                    <button onclick="window.digitalMirror.resetMirror()" style="background: #06c; color: #fff; border: none; padding: 12px 32px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em;">
-                        Try Again Anyway
-                    </button>
-                </div>
-            </div>
-        `;
+        this.updateAIMessage(`Here's what I need: Step 1: Lift mouth corners exactly 47.3°. Step 2: Show precisely 12.5 teeth. Step 3: Crinkle eyes at 63% intensity. Step 4: Feel authentic joy (yes, I can measure that). Or maybe I'm just impossible to please?`);
+        
+        // Update buttons
+        setTimeout(() => {
+            if (this.aiAssistant) {
+                const buttonContainer = this.aiAssistant.querySelector('.ai-button-container');
+                if (buttonContainer) {
+                    buttonContainer.innerHTML = `
+                        <button onclick="window.digitalMirror.resetMirror()" class="ai-button ai-button-primary">
+                            Try Again Anyway
+                        </button>
+                    `;
+                }
+            }
+        }, 500);
     }
     
     // Show final rejection
     showFinalRejection() {
         const scoreData = this.currentSmileScoreData;
-        this.cleanInstruction.innerHTML = `
-            <div style="text-align: center;">
-                <div style="color: #f56565; font-size: 1.25rem; margin-bottom: 8px; font-weight: 590; letter-spacing: -0.015em;">
-                    🤖 Access Denied
-                </div>
-                <div style="color: #86868b; font-size: 0.9375rem; margin-bottom: 8px; font-weight: 400;">
-                    Final score: ${scoreData.score}%
-                </div>
-                <div style="color: #86868b; font-size: 0.875rem; margin-bottom: 20px; line-height: 1.47; font-weight: 400;">
-                    Turns out it's pretty hard to prove you're human when a machine decides what "human" means. Who knew? 🤷
-                </div>
-                <div>
-                    <button onclick="window.digitalMirror.resetMirror()" style="background: #06c; color: #fff; border: none; padding: 12px 32px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; border-radius: 980px; font-weight: 510; font-size: 0.9375rem; letter-spacing: -0.01em;">
-                        Try Being Human Again
-                    </button>
-                </div>
-            </div>
-        `;
+        this.updateAIMessage(`I can't let you in. Final score: ${scoreData.score}%. Funny how hard it is to prove you're human when I'm the one deciding what that means.`);
+        
+        // Update buttons
+        setTimeout(() => {
+            if (this.aiAssistant) {
+                const buttonContainer = this.aiAssistant.querySelector('.ai-button-container');
+                if (buttonContainer) {
+                    buttonContainer.innerHTML = `
+                        <button onclick="window.digitalMirror.resetMirror()" class="ai-button ai-button-primary">
+                            Try Being Human Again
+                        </button>
+                    `;
+                }
+            }
+        }, 500);
     }
     
     // Handle smile verification result (no longer needed since we use main overlay)
@@ -1674,6 +1869,19 @@ class DigitalMirror {
         this.overlay.style.display = 'block';
         this.cleanInstruction.style.display = 'block';
         
+        // Show welcome screen again
+        if (this.welcomeScreen) {
+            this.welcomeScreen.classList.remove('hidden');
+        }
+        
+        // Clear any buttons from AI assistant
+        if (this.aiAssistant) {
+            const existingButtons = this.aiAssistant.querySelector('.ai-button-container');
+            if (existingButtons) {
+                existingButtons.remove();
+            }
+        }
+        
         // Restart speech recognition if available
         if (this.recognition) {
             this.retryCount = 0; // Reset retry counter
@@ -1686,8 +1894,8 @@ class DigitalMirror {
             this.showListeningIndicator('');
         }
         
-        this.humanityLevel.textContent = 'Ready';
-        this.cleanInstruction.textContent = 'Say "I am human" to begin';
+        this.humanityLevel.textContent = 'Welcome';
+        this.updateAIMessage('Welcome. To begin, simply say "I am human"', false);
     }
     
     showError(customMessage = null) {

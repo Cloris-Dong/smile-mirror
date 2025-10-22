@@ -21,18 +21,34 @@
                 <video id="webcam" autoplay muted playsinline></video>
                 <canvas id="distortion-canvas"></canvas>
                 <div class="overlay" id="overlay">
-                    <div class="humanity-level" id="humanity-level">Ready</div>
-                    <div class="clean-instruction" id="clean-instruction">Say "I am human" to begin</div>
-                    <div class="listening-indicator" id="listening-indicator" style="display: none;">Listening...</div>
+                    <div class="humanity-level" id="humanity-level">Welcome</div>
+                </div>
+                
+                <!-- AI Assistant Corner -->
+                <div class="ai-assistant" id="ai-assistant">
+                    <div class="ai-waveform" id="ai-waveform">
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                    </div>
+                    <div class="ai-message" id="ai-message">Welcome. To begin, simply say "I am human"</div>
+                </div>
+                
+                <div class="welcome-screen" id="welcome-screen">
+                    <div class="welcome-content">
+                        <div class="welcome-prompt">Say "I am human" to begin</div>
+                    </div>
                 </div>
             </div>
         </div>
         
         <div class="captcha-overlay" id="captcha-overlay" style="display: none;">
             <div class="captcha-content">
-                <h1>Analyzing Your Smile</h1>
-                <div class="captcha-instruction">Hold that expression...</div>
-                <div class="captcha-timer" id="captcha-timer">Processing</div>
+                <h1>Let Me See That</h1>
+                <div class="captcha-instruction">Hold still for a moment...</div>
+                <div class="captcha-timer" id="captcha-timer">Reading your face</div>
                 <div class="captcha-image-container">
                     <canvas id="captcha-canvas" width="360" height="640"></canvas>
                 </div>
@@ -45,13 +61,13 @@
         
         <div class="failure-overlay" id="failure-overlay">
             <div class="failure-content">
-                <h1>Hmm, Something's Off</h1>
+                <h1>Hold On</h1>
                 <div class="failure-text">
-                    That doesn't look quite right
+                    Something's not adding up
                 </div>
                 <div class="failure-message">
-                    Our system had trouble recognizing that smile.<br>
-                    Maybe try again? Or perhaps we need to help you learn?
+                    I'm having trouble reading that smile.<br>
+                    Want to give it another shot?
                 </div>
                 <button class="reset-button" id="reset-button">Try Again</button>
             </div>
