@@ -57,6 +57,20 @@ class DigitalMirror {
             joyDetection: 0
         };
         this.metricSmoothingFactor = 0.3; // Lower = smoother transitions
+        this.smoothedSmileScore = 0; // EMA smoothed smiling score
+        
+        // Dynamic range tracking for adaptive normalization
+        this.facialRanges = {
+            mouthNoseDistanceLeft: { min: Infinity, max: -Infinity, history: [] },
+            mouthNoseDistanceRight: { min: Infinity, max: -Infinity, history: [] },
+            cheekEyeDistanceLeft: { min: Infinity, max: -Infinity, history: [] },
+            cheekEyeDistanceRight: { min: Infinity, max: -Infinity, history: [] },
+            eyeWidthLeft: { min: Infinity, max: -Infinity, history: [] },
+            eyeWidthRight: { min: Infinity, max: -Infinity, history: [] },
+            warmupFrames: 30, // Wait this many frames before calculating scores
+            frameCount: 0,
+            maxHistory: 120 // Keep last 120 frames (4 seconds at 30fps) for dynamic adjustment
+        };
         
         // Tutorial audio and captions
         this.tutorialAudio = null;
@@ -715,6 +729,116 @@ class DigitalMirror {
         const dy = point1[1] - point2[1];
         const dz = point1[2] - point2[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    
+    // Calculate mouth smile intensity (0-1 range) with dynamic range tracking
+    calculateMouthSmile(mouthCorner, nose, isLeft = true) {
+        // Measure the Y-coordinate difference between nose and mouth corner
+        const verticalDiff = mouthCorner[1] - nose[1];
+        
+        const key = isLeft ? 'mouthNoseDistanceLeft' : 'mouthNoseDistanceRight';
+        const range = this.facialRanges[key];
+        
+        // Update history
+        range.history.push(verticalDiff);
+        if (range.history.length > this.facialRanges.maxHistory) {
+            range.history.shift(); // Remove oldest
+        }
+        
+        // Update min/max dynamically
+        range.min = Math.min(range.min, verticalDiff);
+        range.max = Math.max(range.max, verticalDiff);
+        
+        // During warmup, return 0
+        if (this.facialRanges.frameCount < this.facialRanges.warmupFrames) {
+            return 0;
+        }
+        
+        // Calculate intensity based on current range
+        // Lower value (mouth higher) = more smile, so we invert the normalization
+        const rangeSpan = range.max - range.min;
+        if (rangeSpan < 1) return 0; // Not enough movement yet
+        
+        // Normalize: 0 = at max (lowest smile), 1 = at min (highest smile)
+        const smileIntensity = (range.max - verticalDiff) / rangeSpan;
+        
+        return Math.max(0, Math.min(1, smileIntensity));
+    }
+    
+    // Calculate cheek squint intensity (0-1 range) with dynamic range tracking
+    calculateCheekSquint(cheek, eyeOuter, isLeft = true) {
+        // Measure 3D distance between cheek and eye outer corner
+        const dist = this.distance(cheek, eyeOuter);
+        
+        const key = isLeft ? 'cheekEyeDistanceLeft' : 'cheekEyeDistanceRight';
+        const range = this.facialRanges[key];
+        
+        // Update history
+        range.history.push(dist);
+        if (range.history.length > this.facialRanges.maxHistory) {
+            range.history.shift();
+        }
+        
+        // Update min/max
+        range.min = Math.min(range.min, dist);
+        range.max = Math.max(range.max, dist);
+        
+        // During warmup, return 0
+        if (this.facialRanges.frameCount < this.facialRanges.warmupFrames) {
+            return 0;
+        }
+        
+        // When squinting, distance decreases
+        const rangeSpan = range.max - range.min;
+        if (rangeSpan < 1) return 0;
+        
+        // Normalize: 0 = at max (no squint), 1 = at min (max squint)
+        const squintIntensity = (range.max - dist) / rangeSpan;
+        
+        return Math.max(0, Math.min(1, squintIntensity));
+    }
+    
+    // Calculate eye smile intensity (0-1 range) with dynamic range tracking
+    calculateEyeSmile(eyeInner, eyeOuter, isLeft = true) {
+        // Measure 3D distance between eye inner and outer corners
+        const eyeWidth = this.distance(eyeInner, eyeOuter);
+        
+        const key = isLeft ? 'eyeWidthLeft' : 'eyeWidthRight';
+        const range = this.facialRanges[key];
+        
+        // Update history
+        range.history.push(eyeWidth);
+        if (range.history.length > this.facialRanges.maxHistory) {
+            range.history.shift();
+        }
+        
+        // Update min/max
+        range.min = Math.min(range.min, eyeWidth);
+        range.max = Math.max(range.max, eyeWidth);
+        
+        // During warmup, return 0
+        if (this.facialRanges.frameCount < this.facialRanges.warmupFrames) {
+            return 0;
+        }
+        
+        // When smiling, eye width decreases
+        const rangeSpan = range.max - range.min;
+        if (rangeSpan < 0.5) return 0; // Eyes move less than other features
+        
+        // Normalize: 0 = at max (no smile), 1 = at min (max smile)
+        const narrowIntensity = (range.max - eyeWidth) / rangeSpan;
+        
+        return Math.max(0, Math.min(1, narrowIntensity));
+    }
+    
+    // Helper function to calculate median of an array
+    getMedian(arr) {
+        if (arr.length === 0) return 0;
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0 
+            ? (sorted[mid - 1] + sorted[mid]) / 2 
+            : sorted[mid];
     }
     
     // Trigger smile verification challenge
@@ -1439,106 +1563,152 @@ class DigitalMirror {
         
         const width = this.facialOverlay.width;
         
-        // Key smile landmarks
-        const leftMouth = this.realLandmarks[61];
-        const rightMouth = this.realLandmarks[291];
-        const topLip = this.realLandmarks[13];
-        const bottomLip = this.realLandmarks[14];
-        const nose = this.realLandmarks[1];
+        // Key facial landmarks for MediaPipe Face Mesh
+        const leftMouth = this.realLandmarks[61];      // Left mouth corner
+        const rightMouth = this.realLandmarks[291];    // Right mouth corner
+        const topLip = this.realLandmarks[13];         // Top lip center
+        const bottomLip = this.realLandmarks[14];      // Bottom lip center
+        const nose = this.realLandmarks[1];            // Nose tip
         
-        // Calculate metrics (0-100 scale)
-        const avgMouthY = (leftMouth[1] + rightMouth[1]) / 2;
-        const rawSmileIntensity = Math.max(0, Math.min(100, ((nose[1] - avgMouthY) / nose[1] * 200)));
-        const lipSeparation = Math.max(0, Math.min(100, Math.abs(topLip[1] - bottomLip[1]) * 2));
-        const mouthWidth = Math.max(0, Math.min(100, Math.sqrt(
-            Math.pow(leftMouth[0] - rightMouth[0], 2) + 
-            Math.pow(leftMouth[1] - rightMouth[1], 2)
-        ) / 2));
+        // Eye landmarks for joy detection
+        const leftEyeOuter = this.realLandmarks[33];   // Left eye outer corner
+        const rightEyeOuter = this.realLandmarks[263]; // Right eye outer corner
+        const leftEyeInner = this.realLandmarks[133];  // Left eye inner corner
+        const rightEyeInner = this.realLandmarks[362]; // Right eye inner corner
         
-        // Get additional landmarks for symmetry and joy detection
-        const leftEyeOuter = this.realLandmarks[33];
-        const rightEyeOuter = this.realLandmarks[263];
-        const leftEyeInner = this.realLandmarks[133];
-        const rightEyeInner = this.realLandmarks[362];
+        // Cheek landmarks for muscle activation
+        const leftCheek = this.realLandmarks[116];     // Left cheek
+        const rightCheek = this.realLandmarks[345];    // Right cheek
         
-        // Calculate facial symmetry based on left-right balance
-        const leftMouthElevation = nose[1] - leftMouth[1];
-        const rightMouthElevation = nose[1] - rightMouth[1];
-        const mouthSymmetry = 100 - Math.abs(leftMouthElevation - rightMouthElevation) * 2;
+        // Calculate actual facial metrics based on the formulas
         
-        const leftEyeWidth = this.distance(leftEyeInner, leftEyeOuter);
-        const rightEyeWidth = this.distance(rightEyeInner, rightEyeOuter);
-        const eyeSymmetry = 100 - Math.abs(leftEyeWidth - rightEyeWidth) / Math.max(leftEyeWidth, rightEyeWidth) * 100;
+        // Debug: Log raw landmark positions
+        console.log('Landmark positions:', {
+            leftMouth: leftMouth,
+            rightMouth: rightMouth,
+            nose: nose,
+            leftEyeInner: leftEyeInner,
+            rightEyeInner: rightEyeInner
+        });
         
-        const rawFacialSymmetry = (mouthSymmetry + eyeSymmetry) / 2;
+        // Increment frame counter for warmup period
+        this.facialRanges.frameCount++;
         
-        // Calculate joy detection based on eye crinkle (Duchenne marker)
-        const leftEyeTop = this.realLandmarks[159];
-        const leftEyeBottom = this.realLandmarks[145];
-        const rightEyeTop = this.realLandmarks[386];
-        const rightEyeBottom = this.realLandmarks[374];
-        
-        const leftEyeHeight = Math.abs(leftEyeTop[1] - leftEyeBottom[1]);
-        const rightEyeHeight = Math.abs(rightEyeTop[1] - rightEyeBottom[1]);
-        const eyeCrinkle = Math.max(0, 100 - (leftEyeHeight + rightEyeHeight) * 5);
-        
-        const rawJoyDetection = (eyeCrinkle + rawSmileIntensity) / 2;
-        
-        // Add realistic variance and noise
-        const time = Date.now() * 0.001;
-        const microVariation = () => (Math.random() - 0.5) * 1.5; // ±0.75% random noise
-        
-        // Calculate raw target values with realistic ranges
-        let targetMuscleActivation = Math.max(55, Math.min(79, (rawSmileIntensity + mouthWidth) / 2 + 25));
-        let targetFacialSymmetry = Math.max(60, Math.min(78, rawFacialSymmetry * 0.7 + 15));
-        let targetJoyDetection = Math.max(50, Math.min(77, rawJoyDetection * 0.7 + 15));
-        
-        // Add correlation between metrics (realistic: they should influence each other)
-        // When smiling, symmetry tends to decrease slightly (faces aren't perfectly symmetric when expressing)
-        const expressionPenalty = rawSmileIntensity * 0.05;
-        targetFacialSymmetry = Math.max(60, targetFacialSymmetry - expressionPenalty);
-        
-        // Joy detection correlates with muscle activation (genuine smiles engage both)
-        const joyMuscleCorrelation = targetMuscleActivation * 0.15;
-        targetJoyDetection = Math.max(50, Math.min(77, targetJoyDetection + joyMuscleCorrelation - 10));
-        
-        // Apply temporal smoothing (realistic: values don't jump instantly)
-        if (!this.smoothedMetrics.muscleActivation) {
-            // Initialize on first run
-            this.smoothedMetrics.muscleActivation = targetMuscleActivation;
-            this.smoothedMetrics.facialSymmetry = targetFacialSymmetry;
-            this.smoothedMetrics.joyDetection = targetJoyDetection;
-        } else {
-            // Smooth transition to new values
-            this.smoothedMetrics.muscleActivation += (targetMuscleActivation - this.smoothedMetrics.muscleActivation) * this.metricSmoothingFactor;
-            this.smoothedMetrics.facialSymmetry += (targetFacialSymmetry - this.smoothedMetrics.facialSymmetry) * this.metricSmoothingFactor;
-            this.smoothedMetrics.joyDetection += (targetJoyDetection - this.smoothedMetrics.joyDetection) * this.metricSmoothingFactor;
+        // Log warmup progress
+        if (this.facialRanges.frameCount <= this.facialRanges.warmupFrames) {
+            console.log(`Warming up... ${this.facialRanges.frameCount}/${this.facialRanges.warmupFrames} frames`);
+        } else if (this.facialRanges.frameCount === this.facialRanges.warmupFrames + 1) {
+            console.log('Warmup complete! Now tracking facial expressions dynamically.');
         }
         
-        // Final values with micro-variations for realism
-        const muscleActivation = Math.max(55, Math.min(79, this.smoothedMetrics.muscleActivation + microVariation()));
-        const facialSymmetry = Math.max(60, Math.min(78, this.smoothedMetrics.facialSymmetry + microVariation()));
-        const joyDetection = Math.max(50, Math.min(77, this.smoothedMetrics.joyDetection + microVariation()));
+        // 1. SMILING SCORE (0-100%)
+        // Formula: smile = avg(mouthSmileLeft, mouthSmileRight) → smooth with EMA → ×100
+        const mouthSmileLeft = this.calculateMouthSmile(leftMouth, nose, true);
+        const mouthSmileRight = this.calculateMouthSmile(rightMouth, nose, false);
+        const rawSmileScore = (mouthSmileLeft + mouthSmileRight) / 2;
         
-        // Position for energy bars
-        const mirroredX = width - this.faceBoundingBox.x;
-        const boxX = mirroredX - this.faceBoundingBox.width / 2;
-        const boxY = this.faceBoundingBox.y + this.faceBoundingBox.height / 2 + 20;
+        console.log('Smile calculations:', {
+            mouthSmileLeft,
+            mouthSmileRight,
+            rawSmileScore,
+            isWarmedUp: this.facialRanges.frameCount >= this.facialRanges.warmupFrames
+        });
         
-        const barWidth = this.faceBoundingBox.width - 40;
-        const barHeight = 10;
-        const barSpacing = 32;
+        // Apply EMA smoothing for smiling score
+        if (!this.smoothedSmileScore) {
+            this.smoothedSmileScore = rawSmileScore;
+        } else {
+            const emaAlpha = 0.3; // EMA smoothing factor
+            this.smoothedSmileScore = emaAlpha * rawSmileScore + (1 - emaAlpha) * this.smoothedSmileScore;
+        }
+        
+        const smilingScore = Math.max(0, Math.min(65, this.smoothedSmileScore * 65)); // Cap at 65
+        
+        // 2. MUSCLE ACTIVATION
+        // Formula: activation = 0.6*avg(mouthSmileL,R) + 0.2*avg(cheekSquintL,R) + 0.2*avg(eyeSmileL,R) → ×65 (capped)
+        const mouthSmileAvg = (mouthSmileLeft + mouthSmileRight) / 2;
+        const cheekSquintLeft = this.calculateCheekSquint(leftCheek, leftEyeOuter, true);
+        const cheekSquintRight = this.calculateCheekSquint(rightCheek, rightEyeOuter, false);
+        const cheekSquintAvg = (cheekSquintLeft + cheekSquintRight) / 2;
+        const eyeSmileLeft = this.calculateEyeSmile(leftEyeInner, leftEyeOuter, true);
+        const eyeSmileRight = this.calculateEyeSmile(rightEyeInner, rightEyeOuter, false);
+        const eyeSmileAvg = (eyeSmileLeft + eyeSmileRight) / 2;
+        
+        console.log('Muscle activation components:', {
+            mouthSmileAvg,
+            cheekSquintAvg,
+            eyeSmileAvg,
+            cheekSquintLeft,
+            cheekSquintRight,
+            eyeSmileLeft,
+            eyeSmileRight
+        });
+        
+        const muscleActivation = Math.max(0, Math.min(65, 
+            (0.6 * mouthSmileAvg + 0.2 * cheekSquintAvg + 0.2 * eyeSmileAvg) * 65
+        )); // Cap at 65
+        
+        // 3. FACIAL SYMMETRY
+        // Formula: sym = 1 - abs(mouthSmileLeft - mouthSmileRight) → ×65 (capped)
+        const symmetryDifference = Math.abs(mouthSmileLeft - mouthSmileRight);
+        const facialSymmetry = Math.max(0, Math.min(65, 
+            (1 - symmetryDifference) * 65
+        )); // Cap at 65
+        
+        console.log('Symmetry calculation:', {
+            mouthSmileLeft,
+            mouthSmileRight,
+            symmetryDifference,
+            facialSymmetry
+        });
+        
+        // 4. JOY DETECTION (lightweight proxy)
+        // Formula: joy = 0.7*smile + 0.3*avg(eyeSmileL,R)*65 (capped)
+        const joyDetection = Math.max(0, Math.min(65, 
+            0.7 * (smilingScore / 65) * 65 + 0.3 * eyeSmileAvg * 65
+        )); // Cap at 65
+        
+        console.log('Final calculations:', {
+            smilingScore,
+            muscleActivation,
+            facialSymmetry,
+            joyDetection
+        });
+        
+        // Apply temporal smoothing to prevent jittery values
+        if (!this.smoothedMetrics.muscleActivation) {
+            this.smoothedMetrics.muscleActivation = muscleActivation;
+            this.smoothedMetrics.facialSymmetry = facialSymmetry;
+            this.smoothedMetrics.joyDetection = joyDetection;
+        } else {
+            this.smoothedMetrics.muscleActivation += (muscleActivation - this.smoothedMetrics.muscleActivation) * this.metricSmoothingFactor;
+            this.smoothedMetrics.facialSymmetry += (facialSymmetry - this.smoothedMetrics.facialSymmetry) * this.metricSmoothingFactor;
+            this.smoothedMetrics.joyDetection += (joyDetection - this.smoothedMetrics.joyDetection) * this.metricSmoothingFactor;
+        }
+        
+        // Use smoothed values for display
+        const finalMuscleActivation = this.smoothedMetrics.muscleActivation;
+        const finalFacialSymmetry = this.smoothedMetrics.facialSymmetry;
+        const finalJoyDetection = this.smoothedMetrics.joyDetection;
+        
+        // Bar dimensions - larger and more visible
+        const barWidth = Math.max(350, this.faceBoundingBox.width * 1.3); // Wider bars, minimum 350px
+        const barHeight = 16; // Taller bars (was 10)
+        const barSpacing = 45; // More spacing between bars (was 32)
+        
+        // Position for energy bars - centered and fixed position for better visibility
+        const boxX = (width - barWidth) / 2; // Center horizontally
+        const boxY = this.faceBoundingBox.y + this.faceBoundingBox.height / 2 + 40; // Below face
         
         const metrics = [
-            { label: 'Muscle Activation', value: muscleActivation, color: '#007AFF' },
-            { label: 'Facial Symmetry', value: facialSymmetry, color: '#5856D6' },
-            { label: 'Joy Detection', value: joyDetection, color: '#FF2D55' }
+            { label: 'Muscle Activation', value: finalMuscleActivation, color: '#007AFF' },
+            { label: 'Facial Symmetry', value: finalFacialSymmetry, color: '#5856D6' },
+            { label: 'Joy Detection', value: finalJoyDetection, color: '#FF2D55' }
         ];
         
-        // Calculate overall score (average of all metrics, capped to always fail)
-        const rawOverallScore = (muscleActivation + facialSymmetry + joyDetection) / 3;
-        const overallScore = Math.min(79, rawOverallScore); // Always cap at 79% (just 1% short!)
-        const passingThreshold = 80; // Need 80% to pass
+        // Use smiling score as the main overall score (capped at 65, never reaches 80)
+        const overallScore = Math.min(65, smilingScore); // Always cap at 65 (15 points short of passing!)
+        const passingThreshold = 80; // Need 80 to pass (impossible with 65 cap)
         
         // Draw OVERALL SCORE BAR at top of screen (bigger and more prominent)
         const topMargin = 80;
@@ -1625,44 +1795,61 @@ class DigitalMirror {
         ctx.fillText('PASS', thresholdX, overallY - 14);
         ctx.textAlign = 'left';
         
-        // Draw individual metric bars (smaller, below overall)
+        // Draw individual metric bars (larger, more visible)
         metrics.forEach((metric, index) => {
-            const y = boxY + 30 + (index * barSpacing);
+            const y = boxY + 40 + (index * barSpacing);
             
-            // Draw label with shadow for visibility
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-            ctx.shadowBlur = 4;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
-            ctx.font = '600 16px -apple-system, BlinkMacSystemFont, SF Pro Text';
-            ctx.fillText(metric.label, boxX + 20, y - 10);
+            // Draw label with stronger shadow and larger font
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 2;
+            ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+            ctx.font = '700 22px -apple-system, BlinkMacSystemFont, SF Pro Text'; // Larger font (was 16px)
+            ctx.fillText(metric.label, boxX + 20, y - 14);
             ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
             
-            // Draw background bar
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+            // Draw background bar with stronger border
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
             ctx.beginPath();
             ctx.roundRect(boxX + 20, y, barWidth, barHeight, barHeight / 2);
             ctx.fill();
             
-            // Draw progress bar with gradient
+            // Add border to background bar
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(boxX + 20, y, barWidth, barHeight, barHeight / 2);
+            ctx.stroke();
+            
+            // Draw progress bar with gradient and glow
             const progressWidth = (barWidth * metric.value) / 100;
             const gradient = ctx.createLinearGradient(boxX + 20, 0, boxX + 20 + progressWidth, 0);
             gradient.addColorStop(0, metric.color);
-            gradient.addColorStop(1, metric.color + 'CC');
+            gradient.addColorStop(1, metric.color + 'DD');
+            
+            // Add glow effect
+            ctx.shadowColor = metric.color;
+            ctx.shadowBlur = 15;
             
             ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.roundRect(boxX + 20, y, progressWidth, barHeight, barHeight / 2);
             ctx.fill();
             
-            // Draw percentage with shadow
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-            ctx.shadowBlur = 4;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
-            ctx.font = '700 15px -apple-system, BlinkMacSystemFont, SF Pro Text';
+            ctx.shadowBlur = 0;
+            
+            // Draw percentage with stronger shadow and larger font
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 2;
+            ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+            ctx.font = '700 24px -apple-system, BlinkMacSystemFont, SF Pro Display'; // Larger font (was 15px)
             ctx.textAlign = 'right';
-            ctx.fillText(`${Math.round(metric.value)}%`, boxX + 20 + barWidth + 40, y + 8);
+            ctx.fillText(`${Math.round(metric.value)}%`, boxX + 20 + barWidth + 60, y + 12);
             ctx.textAlign = 'left';
             ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
         });
     }
     
@@ -1705,8 +1892,8 @@ class DigitalMirror {
             joyDetection: this.smoothedMetrics.joyDetection || 0
         };
         
-        // Calculate overall score from final measurements
-        const overallScore = (finalMetrics.muscleActivation + finalMetrics.facialSymmetry + finalMetrics.joyDetection) / 3;
+        // Use the smiling score as the main score (already calculated and smoothed, capped at 65)
+        const overallScore = this.smoothedSmileScore ? Math.min(65, this.smoothedSmileScore * 65) : 0;
         
         const scoreData = {
             score: Math.round(overallScore),
@@ -1821,8 +2008,8 @@ class DigitalMirror {
             joyDetection: this.smoothedMetrics.joyDetection || 0
         };
         
-        const overallScore = (finalMetrics.muscleActivation + finalMetrics.facialSymmetry + finalMetrics.joyDetection) / 3;
-        const finalScore = Math.round(overallScore);
+        // Use the smiling score as the main score (capped at 65)
+        const finalScore = this.smoothedSmileScore ? Math.round(Math.min(65, this.smoothedSmileScore * 65)) : 0;
         
         this.updateAIMessage(`I can't let you in. Final score: ${finalScore}%. Funny how hard it is to prove you're human when I'm the one deciding what that means.`);
         
@@ -2223,6 +2410,27 @@ class DigitalMirror {
         this.isListening = false;
         this.audioStarted = false;
         this.capturedFaceImages = [];
+        
+        // Reset smoothed metrics
+        this.smoothedMetrics = {
+            muscleActivation: 0,
+            facialSymmetry: 0,
+            joyDetection: 0
+        };
+        this.smoothedSmileScore = 0;
+        
+        // Reset facial ranges
+        this.facialRanges = {
+            mouthNoseDistanceLeft: { min: Infinity, max: -Infinity, history: [] },
+            mouthNoseDistanceRight: { min: Infinity, max: -Infinity, history: [] },
+            cheekEyeDistanceLeft: { min: Infinity, max: -Infinity, history: [] },
+            cheekEyeDistanceRight: { min: Infinity, max: -Infinity, history: [] },
+            eyeWidthLeft: { min: Infinity, max: -Infinity, history: [] },
+            eyeWidthRight: { min: Infinity, max: -Infinity, history: [] },
+            warmupFrames: 30,
+            frameCount: 0,
+            maxHistory: 120
+        };
         
         // Clear overlay updates
         this.stopOverlayUpdates();
