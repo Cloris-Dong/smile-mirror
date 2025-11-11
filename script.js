@@ -80,6 +80,11 @@ class DigitalMirror {
         this.captionStartTime = null;
         this.audioStarted = false;
         
+        // Emotional Economics Game
+        this.gameLoop = null;
+        this.gameContainer = null;
+        this.gameStarting = false; // Flag to prevent multiple starts
+        
         // TensorFlow.js facial detection properties
         this.model = null;
         this.isModelLoaded = false;
@@ -126,6 +131,8 @@ class DigitalMirror {
             this.startDistortionLoop();
             // Always add test button for easy testing
             this.addTestButton();
+            // Add debug button to skip smile measurement
+            this.addDebugSkipToGameButton();
         } catch (error) {
             console.error('Initialization failed:', error);
             this.showError();
@@ -446,7 +453,7 @@ class DigitalMirror {
         testButton.style.cssText = `
             position: fixed;
             top: 24px;
-            right: 24px;
+            left: 24px;
             background: rgba(255, 255, 255, 0.92);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -455,7 +462,7 @@ class DigitalMirror {
             padding: 10px 20px;
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
             cursor: pointer;
-            z-index: 1000;
+            z-index: 10001;
             font-weight: 510;
             font-size: 0.875rem;
             letter-spacing: -0.01em;
@@ -1557,75 +1564,42 @@ class DigitalMirror {
         return;
     }
     
-    // Draw measurement as energy bars - Apple style
-    drawMeasurementLabels(ctx) {
-        if (!this.faceBoundingBox || !this.realLandmarks || this.realLandmarks.length < 468) return;
-        
-        const width = this.facialOverlay.width;
+    // Calculate metrics (extracted for reuse)
+    calculateMetrics() {
+        if (!this.faceBoundingBox || !this.realLandmarks || this.realLandmarks.length < 468) {
+            return null;
+        }
         
         // Key facial landmarks for MediaPipe Face Mesh
-        const leftMouth = this.realLandmarks[61];      // Left mouth corner
-        const rightMouth = this.realLandmarks[291];    // Right mouth corner
-        const topLip = this.realLandmarks[13];         // Top lip center
-        const bottomLip = this.realLandmarks[14];      // Bottom lip center
-        const nose = this.realLandmarks[1];            // Nose tip
-        
-        // Eye landmarks for joy detection
-        const leftEyeOuter = this.realLandmarks[33];   // Left eye outer corner
-        const rightEyeOuter = this.realLandmarks[263]; // Right eye outer corner
-        const leftEyeInner = this.realLandmarks[133];  // Left eye inner corner
-        const rightEyeInner = this.realLandmarks[362]; // Right eye inner corner
-        
-        // Cheek landmarks for muscle activation
-        const leftCheek = this.realLandmarks[116];     // Left cheek
-        const rightCheek = this.realLandmarks[345];    // Right cheek
-        
-        // Calculate actual facial metrics based on the formulas
-        
-        // Debug: Log raw landmark positions
-        console.log('Landmark positions:', {
-            leftMouth: leftMouth,
-            rightMouth: rightMouth,
-            nose: nose,
-            leftEyeInner: leftEyeInner,
-            rightEyeInner: rightEyeInner
-        });
+        const leftMouth = this.realLandmarks[61];
+        const rightMouth = this.realLandmarks[291];
+        const nose = this.realLandmarks[1];
+        const leftEyeOuter = this.realLandmarks[33];
+        const rightEyeOuter = this.realLandmarks[263];
+        const leftEyeInner = this.realLandmarks[133];
+        const rightEyeInner = this.realLandmarks[362];
+        const leftCheek = this.realLandmarks[116];
+        const rightCheek = this.realLandmarks[345];
         
         // Increment frame counter for warmup period
         this.facialRanges.frameCount++;
         
-        // Log warmup progress
-        if (this.facialRanges.frameCount <= this.facialRanges.warmupFrames) {
-            console.log(`Warming up... ${this.facialRanges.frameCount}/${this.facialRanges.warmupFrames} frames`);
-        } else if (this.facialRanges.frameCount === this.facialRanges.warmupFrames + 1) {
-            console.log('Warmup complete! Now tracking facial expressions dynamically.');
-        }
-        
-        // 1. SMILING SCORE (0-100%)
-        // Formula: smile = avg(mouthSmileLeft, mouthSmileRight) → smooth with EMA → ×100
+        // 1. SMILING SCORE
         const mouthSmileLeft = this.calculateMouthSmile(leftMouth, nose, true);
         const mouthSmileRight = this.calculateMouthSmile(rightMouth, nose, false);
         const rawSmileScore = (mouthSmileLeft + mouthSmileRight) / 2;
         
-        console.log('Smile calculations:', {
-            mouthSmileLeft,
-            mouthSmileRight,
-            rawSmileScore,
-            isWarmedUp: this.facialRanges.frameCount >= this.facialRanges.warmupFrames
-        });
-        
-        // Apply EMA smoothing for smiling score
+        // Apply EMA smoothing
         if (!this.smoothedSmileScore) {
             this.smoothedSmileScore = rawSmileScore;
         } else {
-            const emaAlpha = 0.3; // EMA smoothing factor
+            const emaAlpha = 0.3;
             this.smoothedSmileScore = emaAlpha * rawSmileScore + (1 - emaAlpha) * this.smoothedSmileScore;
         }
         
-        const smilingScore = Math.max(0, Math.min(65, this.smoothedSmileScore * 65)); // Cap at 65
+        const smilingScore = Math.max(0, Math.min(65, this.smoothedSmileScore * 65));
         
         // 2. MUSCLE ACTIVATION
-        // Formula: activation = 0.6*avg(mouthSmileL,R) + 0.2*avg(cheekSquintL,R) + 0.2*avg(eyeSmileL,R) → ×65 (capped)
         const mouthSmileAvg = (mouthSmileLeft + mouthSmileRight) / 2;
         const cheekSquintLeft = this.calculateCheekSquint(leftCheek, leftEyeOuter, true);
         const cheekSquintRight = this.calculateCheekSquint(rightCheek, rightEyeOuter, false);
@@ -1634,48 +1608,22 @@ class DigitalMirror {
         const eyeSmileRight = this.calculateEyeSmile(rightEyeInner, rightEyeOuter, false);
         const eyeSmileAvg = (eyeSmileLeft + eyeSmileRight) / 2;
         
-        console.log('Muscle activation components:', {
-            mouthSmileAvg,
-            cheekSquintAvg,
-            eyeSmileAvg,
-            cheekSquintLeft,
-            cheekSquintRight,
-            eyeSmileLeft,
-            eyeSmileRight
-        });
-        
         const muscleActivation = Math.max(0, Math.min(65, 
             (0.6 * mouthSmileAvg + 0.2 * cheekSquintAvg + 0.2 * eyeSmileAvg) * 65
-        )); // Cap at 65
+        ));
         
         // 3. FACIAL SYMMETRY
-        // Formula: sym = 1 - abs(mouthSmileLeft - mouthSmileRight) → ×65 (capped)
         const symmetryDifference = Math.abs(mouthSmileLeft - mouthSmileRight);
         const facialSymmetry = Math.max(0, Math.min(65, 
             (1 - symmetryDifference) * 65
-        )); // Cap at 65
+        ));
         
-        console.log('Symmetry calculation:', {
-            mouthSmileLeft,
-            mouthSmileRight,
-            symmetryDifference,
-            facialSymmetry
-        });
-        
-        // 4. JOY DETECTION (lightweight proxy)
-        // Formula: joy = 0.7*smile + 0.3*avg(eyeSmileL,R)*65 (capped)
+        // 4. JOY DETECTION
         const joyDetection = Math.max(0, Math.min(65, 
             0.7 * (smilingScore / 65) * 65 + 0.3 * eyeSmileAvg * 65
-        )); // Cap at 65
+        ));
         
-        console.log('Final calculations:', {
-            smilingScore,
-            muscleActivation,
-            facialSymmetry,
-            joyDetection
-        });
-        
-        // Apply temporal smoothing to prevent jittery values
+        // Apply temporal smoothing
         if (!this.smoothedMetrics.muscleActivation) {
             this.smoothedMetrics.muscleActivation = muscleActivation;
             this.smoothedMetrics.facialSymmetry = facialSymmetry;
@@ -1686,10 +1634,26 @@ class DigitalMirror {
             this.smoothedMetrics.joyDetection += (joyDetection - this.smoothedMetrics.joyDetection) * this.metricSmoothingFactor;
         }
         
-        // Use smoothed values for display
-        const finalMuscleActivation = this.smoothedMetrics.muscleActivation;
-        const finalFacialSymmetry = this.smoothedMetrics.facialSymmetry;
-        const finalJoyDetection = this.smoothedMetrics.joyDetection;
+        return {
+            smilingScore,
+            muscleActivation: this.smoothedMetrics.muscleActivation,
+            facialSymmetry: this.smoothedMetrics.facialSymmetry,
+            joyDetection: this.smoothedMetrics.joyDetection,
+            isWarmedUp: this.facialRanges.frameCount >= this.facialRanges.warmupFrames
+        };
+    }
+    
+    // Draw measurement as energy bars - Apple style
+    drawMeasurementLabels(ctx) {
+        if (!this.faceBoundingBox || !this.realLandmarks || this.realLandmarks.length < 468) return;
+        
+        // Calculate metrics
+        const metrics = this.calculateMetrics();
+        if (!metrics) return;
+        
+        const { smilingScore, muscleActivation: finalMuscleActivation, facialSymmetry: finalFacialSymmetry, joyDetection: finalJoyDetection } = metrics;
+        
+        const width = this.facialOverlay.width;
         
         // Bar dimensions - larger and more visible
         const barWidth = Math.max(350, this.faceBoundingBox.width * 1.3); // Wider bars, minimum 350px
@@ -1700,7 +1664,7 @@ class DigitalMirror {
         const boxX = (width - barWidth) / 2; // Center horizontally
         const boxY = this.faceBoundingBox.y + this.faceBoundingBox.height / 2 + 40; // Below face
         
-        const metrics = [
+        const metricBars = [
             { label: 'Muscle Activation', value: finalMuscleActivation, color: '#007AFF' },
             { label: 'Facial Symmetry', value: finalFacialSymmetry, color: '#5856D6' },
             { label: 'Joy Detection', value: finalJoyDetection, color: '#FF2D55' }
@@ -1796,7 +1760,7 @@ class DigitalMirror {
         ctx.textAlign = 'left';
         
         // Draw individual metric bars (larger, more visible)
-        metrics.forEach((metric, index) => {
+        metricBars.forEach((metric, index) => {
             const y = boxY + 40 + (index * barSpacing);
             
             // Draw label with stronger shadow and larger font
@@ -1909,6 +1873,26 @@ class DigitalMirror {
         
         switch (this.smileLevel) {
             case 1:
+                // Clear any existing reset countdowns to prevent accidental page refresh
+                if (this.resetCountdownTimer) {
+                    clearTimeout(this.resetCountdownTimer);
+                    this.resetCountdownTimer = null;
+                }
+                
+                // Stop overlay animation but keep overlay visible to show score
+                this.isTracking = false;
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+                
+                // Draw final score on overlay (one last time to ensure it's visible)
+                if (this.facialOverlay && this.faceBoundingBox) {
+                    const ctx = this.facialOverlay.getContext('2d');
+                    ctx.clearRect(0, 0, this.facialOverlay.width, this.facialOverlay.height);
+                    this.drawMeasurementLabels(ctx);
+                }
+                
                 this.updateAIMessage(`That's not passing. Score: ${scoreData.score}%. That smile doesn't look genuine to me.`);
                 // Show prompt to try again after delay
                 setTimeout(() => {
@@ -1916,15 +1900,40 @@ class DigitalMirror {
                 }, 2500);
                 break;
             case 2:
+                // Clear any existing reset countdowns to prevent accidental page refresh
+                if (this.resetCountdownTimer) {
+                    clearTimeout(this.resetCountdownTimer);
+                    this.resetCountdownTimer = null;
+                }
+                
+                // Stop animation but keep overlay visible to show score
+                this.isTracking = false;
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+                
+                // Stop any analysis timers immediately
+                if (this.analysisTimer) {
+                    clearInterval(this.analysisTimer);
+                    this.analysisTimer = null;
+                }
+                this.isAnalyzing = false;
+                
+                // Draw final score on overlay (one last time to ensure it's visible)
+                if (this.facialOverlay && this.faceBoundingBox) {
+                    const ctx = this.facialOverlay.getContext('2d');
+                    ctx.clearRect(0, 0, this.facialOverlay.width, this.facialOverlay.height);
+                    this.drawMeasurementLabels(ctx);
+                }
+                
+                // Show the score result
                 this.updateAIMessage(`I'm still not seeing it. Score: ${scoreData.score}%. Look, I need to see real human emotion here.`);
-                // Show prompt to try again after delay
+                
+                // After brief pause, go directly into the game
                 setTimeout(() => {
-                    this.updateAIMessage(`We have some resources to help you!`);
-                    // Wait longer before starting countdown
-                    setTimeout(() => {
-                        this.startTutorialCountdown();
-                    }, 3000);
-                }, 2500);
+                    this.startEmotionalEconomicsGame();
+                }, 3500); // Give player time to absorb the score before transition
                 break;
             case 3:
                 // Show tutorial options
@@ -2020,6 +2029,303 @@ class DigitalMirror {
         setTimeout(() => {
             this.startResetCountdown();
         }, 2000);
+    }
+    
+    // Start Emotional Economics Game
+    async startEmotionalEconomicsGame() {
+        // Prevent multiple starts
+        if (this.gameStarting || this.gameLoop) {
+            console.log('Game already starting or started');
+            return;
+        }
+        
+        try {
+            this.gameStarting = true;
+            console.log('Starting Emotional Economics Game...');
+            
+            // Add debug button to skip intro
+            this.addDebugSkipButton();
+            
+            // Clear any reset countdowns that might interfere
+            if (this.resetCountdownTimer) {
+                clearTimeout(this.resetCountdownTimer);
+                this.resetCountdownTimer = null;
+            }
+            
+            // Hide overlay and stop analysis
+            this.stopOverlayUpdates();
+            this.isAnalyzing = false;
+            if (this.analysisTimer) {
+                clearInterval(this.analysisTimer);
+                this.analysisTimer = null;
+            }
+            
+            // Stop listening
+            this.stopListening();
+            
+            // Create game container if it doesn't exist
+            if (!this.gameContainer) {
+                // Get mirror frame dimensions and position
+                const mirrorFrame = document.querySelector('.mirror-frame');
+                let containerStyle = `
+                    position: fixed;
+                    z-index: 10000;
+                    background: #000;
+                `;
+                
+                if (mirrorFrame) {
+                    const rect = mirrorFrame.getBoundingClientRect();
+                    containerStyle += `
+                        top: ${rect.top}px;
+                        left: ${rect.left}px;
+                        width: ${rect.width}px;
+                        height: ${rect.height}px;
+                        border-radius: 28px;
+                        overflow: hidden;
+                    `;
+                } else {
+                    // Fallback to mirror frame CSS dimensions if element not found
+                    containerStyle += `
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        width: 90vw;
+                        height: 90vh;
+                        max-width: 405px;
+                        max-height: 720px;
+                        border-radius: 28px;
+                        overflow: hidden;
+                    `;
+                }
+                
+                this.gameContainer = document.createElement('div');
+                this.gameContainer.id = 'game-container';
+                this.gameContainer.style.cssText = containerStyle;
+                document.body.appendChild(this.gameContainer);
+                console.log('Game container created to match mirror frame');
+                
+                // Video will be hidden during game
+            }
+            
+            // Import and initialize game
+            console.log('Importing GameLoop module...');
+            const { GameLoop } = await import('./js/GameLoop.js');
+            console.log('GameLoop imported successfully');
+            
+            this.gameLoop = new GameLoop(this, this.gameContainer);
+            console.log('GameLoop initialized');
+            
+            // Hide AI assistant during game
+            if (this.aiAssistant) {
+                this.aiAssistant.style.display = 'none';
+            }
+            
+            // Hide overlay
+            if (this.overlay) {
+                this.overlay.style.display = 'none';
+            }
+            
+            // Hide mirror frame and video so participants don't see themselves
+            const mirrorFrame = document.querySelector('.mirror-frame');
+            if (mirrorFrame) {
+                mirrorFrame.style.opacity = '0';
+                mirrorFrame.style.visibility = 'hidden';
+            }
+            
+            // Keep video element active but visually hidden for face detection
+            // Don't use display: none as it breaks TensorFlow.js face detection
+            // TensorFlow.js needs the video element to have proper dimensions and be in the DOM
+            if (this.webcam) {
+                // Keep video at full size for TensorFlow.js but make it invisible
+                this.webcam.style.opacity = '0';
+                this.webcam.style.position = 'absolute';
+                this.webcam.style.top = '0';
+                this.webcam.style.left = '0';
+                // Keep original dimensions for TensorFlow.js face detection
+                // Don't change width/height - TensorFlow needs proper video dimensions
+                this.webcam.style.zIndex = '-1';
+                this.webcam.style.pointerEvents = 'none';
+                this.webcam.style.visibility = 'visible'; // Keep visible to DOM for TensorFlow
+                this.webcam.style.display = 'block'; // Keep as block for TensorFlow
+                // Ensure video is still playing
+                if (this.webcam.paused) {
+                    this.webcam.play().catch(err => console.error('Error playing video:', err));
+                }
+            }
+            
+            // Hide distortion canvas
+            if (this.canvas) {
+                this.canvas.style.opacity = '0';
+                this.canvas.style.position = 'absolute';
+                this.canvas.style.zIndex = '-1';
+            }
+            
+            // Hide facial overlay canvas if it exists
+            if (this.facialOverlay) {
+                this.facialOverlay.style.opacity = '0';
+                this.facialOverlay.style.position = 'absolute';
+                this.facialOverlay.style.zIndex = '-1';
+            }
+            
+            // Hide mirror surface visually but keep it active
+            const mirrorSurface = document.querySelector('.mirror-surface');
+            if (mirrorSurface) {
+                mirrorSurface.style.opacity = '0';
+                mirrorSurface.style.pointerEvents = 'none';
+            }
+            
+            // Ensure game container has black background
+            if (this.gameContainer) {
+                this.gameContainer.style.background = '#000';
+            }
+            
+            // Start the game
+            console.log('Starting game loop...');
+            await this.gameLoop.start();
+            
+        } catch (error) {
+            console.error('Failed to start Emotional Economics Game:', error);
+            console.error('Error stack:', error.stack);
+            this.gameStarting = false; // Reset flag on error
+            if (this.updateAIMessage) {
+                this.updateAIMessage('Error loading game. Please refresh the page.');
+            }
+            // Show error in game container if it exists
+            if (this.gameContainer) {
+                this.gameContainer.innerHTML = `
+                    <div style="
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        color: white;
+                        text-align: center;
+                        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    ">
+                        <h2>Error Loading Game</h2>
+                        <p>${error.message}</p>
+                        <p style="font-size: 12px; color: #ccc; margin-top: 20px;">Check console for details</p>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    // Add debug button to skip smile measurement and go directly to game
+    addDebugSkipToGameButton() {
+        // Remove existing button if any
+        const existingBtn = document.getElementById('debug-skip-to-game');
+        if (existingBtn) existingBtn.remove();
+        
+        const debugBtn = document.createElement('button');
+        debugBtn.id = 'debug-skip-to-game';
+        debugBtn.textContent = 'Skip to Game';
+        debugBtn.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10002;
+            padding: 10px 20px;
+            background: rgba(0, 255, 0, 0.2);
+            border: 2px solid rgba(0, 255, 0, 0.6);
+            color: #0f0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: all 0.2s;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        `;
+        debugBtn.onmouseenter = () => {
+            debugBtn.style.opacity = '1';
+            debugBtn.style.background = 'rgba(0, 255, 0, 0.3)';
+        };
+        debugBtn.onmouseleave = () => {
+            debugBtn.style.opacity = '0.8';
+            debugBtn.style.background = 'rgba(0, 255, 0, 0.2)';
+        };
+        debugBtn.onclick = async () => {
+            console.log('Debug: Skipping smile measurement and going directly to game...');
+            
+            // Stop any ongoing processes
+            this.stopOverlayUpdates();
+            this.isAnalyzing = false;
+            this.isListening = false;
+            
+            if (this.analysisTimer) {
+                clearInterval(this.analysisTimer);
+                this.analysisTimer = null;
+            }
+            
+            if (this.resetCountdownTimer) {
+                clearTimeout(this.resetCountdownTimer);
+                this.resetCountdownTimer = null;
+            }
+            
+            // Stop listening
+            this.stopListening();
+            
+            // Hide welcome screen and overlays
+            if (this.welcomeScreen) {
+                this.welcomeScreen.classList.add('hidden');
+            }
+            if (this.overlay) {
+                this.overlay.style.display = 'none';
+            }
+            if (this.aiAssistant) {
+                this.aiAssistant.style.display = 'none';
+            }
+            
+            // Set smileLevel to 2 to trigger game start
+            this.smileLevel = 2;
+            
+            // Start the game directly
+            await this.startEmotionalEconomicsGame();
+        };
+        document.body.appendChild(debugBtn);
+    }
+    
+    // Add debug button to skip game intro (called after game starts)
+    addDebugSkipButton() {
+        // Remove existing button if any
+        const existingBtn = document.getElementById('debug-skip-game');
+        if (existingBtn) existingBtn.remove();
+        
+        const debugBtn = document.createElement('button');
+        debugBtn.id = 'debug-skip-game';
+        debugBtn.textContent = 'Skip Intro';
+        debugBtn.style.cssText = `
+            position: fixed;
+            bottom: 80px;
+            left: 20px;
+            z-index: 10001;
+            padding: 8px 16px;
+            background: rgba(255, 255, 0, 0.2);
+            border: 1px solid rgba(255, 255, 0, 0.5);
+            color: #ff0;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        `;
+        debugBtn.onmouseenter = () => debugBtn.style.opacity = '1';
+        debugBtn.onmouseleave = () => debugBtn.style.opacity = '0.7';
+        debugBtn.onclick = async () => {
+            console.log('Debug: Skipping game intro...');
+            // Hide intro if visible
+            const intro = document.getElementById('game-intro');
+            if (intro) intro.style.display = 'none';
+            
+            // Start game loop directly
+            if (this.gameLoop) {
+                await this.gameLoop.skipIntro();
+            }
+        };
+        document.body.appendChild(debugBtn);
     }
     
     // Start countdown before tutorial
