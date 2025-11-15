@@ -271,7 +271,11 @@ class DigitalMirror {
             
         } catch (error) {
             console.error('Speech recognition setup failed:', error);
-            this.fallbackToAlternativeMethods();
+            // Keep retrying instead of falling back
+            this.showListeningIndicator('Retrying setup...');
+            setTimeout(() => {
+                this.setupAudioDetection();
+            }, this.retryDelay);
         }
     }
     
@@ -311,21 +315,28 @@ class DigitalMirror {
             this.showListeningIndicator('Listening...');
         };
         
-        // Handle end
+        // Handle end - this is NORMAL behavior after ~60 seconds of silence, not an error
         this.recognition.onend = () => {
-            console.log('Speech recognition ended');
+            console.log('Speech recognition ended (normal after inactivity)');
             if (this.isListening) {
-                // Restart recognition if we're still supposed to be listening
+                // Simply restart after a short delay - no error handling needed
                 setTimeout(() => {
                     if (this.isListening && this.recognition) {
                         try {
                             this.recognition.start();
+                            console.log('Recognition restarted from onend handler');
                         } catch (error) {
-                            console.error('Failed to restart recognition:', error);
-                            this.handleSpeechError('restart-failed');
+                            // If already started, that's fine - ignore it
+                            if (error.name === 'InvalidStateError' && error.message.includes('already started')) {
+                                console.log('Recognition already started, continuing...');
+                            } else {
+                                // Only handle actual errors
+                                console.error('Failed to restart recognition:', error);
+                                this.handleSpeechError('restart-failed');
+                            }
                         }
                     }
-                }, 500); // Slightly longer delay
+                }, 500);
             }
         };
         
@@ -359,7 +370,7 @@ class DigitalMirror {
     
     handleSpeechError(error) {
         let errorMessage = '';
-        let shouldRestart = false;
+        let shouldRestart = true; // Always try to restart
         
         switch (error) {
             case 'aborted':
@@ -371,51 +382,76 @@ class DigitalMirror {
                 shouldRestart = true;
                 break;
             case 'audio-capture':
-                errorMessage = 'Microphone not accessible. Please check permissions.';
+                errorMessage = 'Microphone not accessible. Retrying...';
+                shouldRestart = true; // Keep trying even for permission issues
                 break;
             case 'not-allowed':
-                errorMessage = 'Microphone permission denied. Please allow access.';
+                errorMessage = 'Microphone permission denied. Retrying...';
+                shouldRestart = true; // Keep trying even for permission issues
                 break;
             case 'network':
-                errorMessage = 'Network error. Please check your connection.';
+                errorMessage = 'Network error. Retrying...';
+                shouldRestart = true; // Keep trying for network errors
                 break;
             case 'service-not-allowed':
-                errorMessage = 'Speech recognition service not allowed.';
+                errorMessage = 'Speech recognition service not allowed. Retrying...';
+                shouldRestart = true; // Keep trying
                 break;
             default:
-                errorMessage = `Speech recognition error: ${error}`;
+                errorMessage = `Speech recognition error: ${error}. Retrying...`;
                 shouldRestart = true;
         }
         
         console.error('Speech recognition error:', errorMessage);
         
+        // Always try to restart, never fall back to alternative methods
         if (shouldRestart && this.isListening) {
             this.retryCount++;
-            if (this.retryCount <= this.maxRetries) {
-                this.showListeningIndicator(`Restarting... (${this.retryCount}/${this.maxRetries})`);
-                // Restart recognition after a delay
-                setTimeout(() => {
-                    if (this.isListening && this.recognition) {
-                        try {
-                            this.recognition.start();
+            this.showListeningIndicator(`Restarting... (attempt ${this.retryCount})`);
+            // Restart recognition after a delay
+            setTimeout(() => {
+                if (this.isListening && this.recognition) {
+                    try {
+                        this.recognition.start();
+                        this.showListeningIndicator('Listening...');
+                        this.retryCount = 0; // Reset counter on successful restart
+                        console.log(`Speech recognition restarted successfully`);
+                    } catch (restartError) {
+                        // If already started, that's fine - ignore it
+                        if (restartError.name === 'InvalidStateError' && restartError.message.includes('already started')) {
+                            console.log('Recognition already started, continuing...');
+                            this.retryCount = 0;
                             this.showListeningIndicator('Listening...');
-                            console.log(`Speech recognition restarted (attempt ${this.retryCount})`);
-                        } catch (restartError) {
+                        } else {
                             console.error('Failed to restart speech recognition:', restartError);
+                            // Keep retrying instead of falling back
                             this.handleSpeechError('restart-failed');
                         }
                     }
-                }, this.retryDelay);
-            } else {
-                console.error('Max retries reached, falling back to alternative methods');
-                this.fallbackToAlternativeMethods();
-            }
-        } else {
-            this.showListeningIndicator('Error: ' + errorMessage);
-            // Fall back to alternative methods for serious errors
+                }
+            }, this.retryDelay);
+        } else if (this.isListening) {
+            // Even for non-restartable errors, keep trying
+            this.showListeningIndicator('Retrying...');
             setTimeout(() => {
-                this.fallbackToAlternativeMethods();
-            }, 2000);
+                if (this.isListening && this.recognition) {
+                    try {
+                        this.recognition.start();
+                        this.showListeningIndicator('Listening...');
+                        this.retryCount = 0;
+                    } catch (retryError) {
+                        // If already started, that's fine - ignore it
+                        if (retryError.name === 'InvalidStateError' && retryError.message.includes('already started')) {
+                            console.log('Recognition already started, continuing...');
+                            this.retryCount = 0;
+                            this.showListeningIndicator('Listening...');
+                        } else {
+                            console.error('Failed to restart speech recognition:', retryError);
+                            this.handleSpeechError('retry-failed');
+                        }
+                    }
+                }
+            }, this.retryDelay);
         }
     }
     
@@ -2775,7 +2811,8 @@ class DigitalMirror {
                 this.showListeningIndicator('Listening...');
             } catch (error) {
                 console.error('Failed to restart speech recognition:', error);
-                this.fallbackToAlternativeMethods();
+                // Keep retrying instead of falling back
+                this.handleSpeechError('restart-failed');
             }
         } else if (this.fallbackActive) {
             this.showListeningIndicator('Fallback Mode');

@@ -6,6 +6,7 @@ export class GameStateManager {
         this.pointBalance = 100;
         this.scenarioHistory = [];
         this.scenariosCompleted = 0;
+        this.genuineSmilesCount = 0; // Track number of genuine smiles for dynamic thresholds
         this.participantPattern = {
             smilesDetected: 0,
             smilesWithheld: 0,
@@ -16,10 +17,14 @@ export class GameStateManager {
     }
     
     getCurrentPhase() {
-        if (this.pointBalance > 70) return 'trust';
-        if (this.pointBalance > 30) return 'pressure';
-        if (this.pointBalance > 0) return 'debt_spiral';
-        return 'game_over';
+        // Round-based phase logic:
+        // First 2 rounds (scenariosCompleted 0-1): trust phase
+        // Next rounds (scenariosCompleted 2+): pressure phase
+        // Last round (balance <= 20): debt_spiral phase
+        if (this.pointBalance <= 0) return 'game_over';
+        if (this.pointBalance <= 20) return 'debt_spiral'; // Last round territory
+        if (this.scenariosCompleted < 2) return 'trust'; // First 2 rounds
+        return 'pressure'; // All other rounds
     }
     
     deductPoints(amount) {
@@ -37,9 +42,35 @@ export class GameStateManager {
     }
     
     isGameOver() {
-        // Game ends when balance goes negative (primary condition)
-        // Or after maximum 5 rounds
-        return this.pointBalance < 0 || this.scenariosCompleted >= 5;
+        // Game ends when balance goes negative (no round cap)
+        return this.pointBalance < 0;
+    }
+    
+    getGenuineSmileThresholds() {
+        // Base thresholds
+        let smileScoreThreshold = 50;
+        let symmetryThreshold = 40;
+        let joyThreshold = 45;
+        let smileDetectedThreshold = 20; // Minimum score to be considered "smile detected"
+        
+        // Increase thresholds after first genuine smile
+        if (this.genuineSmilesCount >= 1) {
+            smileScoreThreshold = 60; // Increased from 50
+            symmetryThreshold = 50; // Increased from 40
+            joyThreshold = 55; // Increased from 45
+            smileDetectedThreshold = 30; // Increased from 20
+        }
+        
+        return {
+            smileScore: smileScoreThreshold,
+            symmetry: symmetryThreshold,
+            joy: joyThreshold,
+            smileDetected: smileDetectedThreshold
+        };
+    }
+    
+    recordGenuineSmile() {
+        this.genuineSmilesCount++;
     }
     
     recordScenarioResult(result) {
@@ -80,6 +111,7 @@ export class GameStateManager {
         this.pointBalance = 100;
         this.scenarioHistory = [];
         this.scenariosCompleted = 0;
+        this.genuineSmilesCount = 0;
         this.participantPattern = {
             smilesDetected: 0,
             smilesWithheld: 0,

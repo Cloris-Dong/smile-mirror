@@ -12,37 +12,40 @@ export class ScenarioController {
     createScenarioPool() {
         return {
             trust: [
-                // Increased deductions: -18 to -25 per smile, -5 to -15 for no smile
-                // Starting balance 100, so 3-5 rounds will end the game
-                { id: 'trust_1', phase: 'trust', promptText: 'A stranger holds the door for you.', observationDuration: 4.5, smileCost: -18, noSmilePenalty: -5, context: 'casual_social', isRepeatable: false },
-                { id: 'trust_2', phase: 'trust', promptText: 'Your coworker shows you photos of their new puppy.', observationDuration: 4.5, smileCost: -20, noSmilePenalty: -8, context: 'friendly_sharing', isRepeatable: false },
-                { id: 'trust_3', phase: 'trust', promptText: 'A cashier says "Have a nice day".', observationDuration: 4.5, smileCost: -18, noSmilePenalty: -6, context: 'service_interaction', isRepeatable: false },
-                { id: 'trust_4', phase: 'trust', promptText: 'A neighbor waves hello.', observationDuration: 4.5, smileCost: -18, noSmilePenalty: -5, context: 'casual_social', isRepeatable: false },
-                { id: 'trust_5', phase: 'trust', promptText: 'Someone compliments your outfit.', observationDuration: 5.5, smileCost: -25, noSmilePenalty: -15, context: 'personal_compliment', isRepeatable: false },
-                { id: 'trust_6', phase: 'trust', promptText: 'A barista smiles at you when handing over coffee.', observationDuration: 4.5, smileCost: -20, noSmilePenalty: -8, context: 'service_interaction', isRepeatable: false },
-                { id: 'trust_7', phase: 'trust', promptText: 'A friend shares good news about their promotion.', observationDuration: 5.5, smileCost: -22, noSmilePenalty: -10, context: 'positive_sharing', isRepeatable: false },
-                { id: 'trust_8', phase: 'trust', promptText: 'A child on the street shows you their toy.', observationDuration: 4.5, smileCost: -20, noSmilePenalty: -8, context: 'innocent_interaction', isRepeatable: false }
+                // Point values designed for ~4 rounds to game over (starting balance 100)
+                // Increased deductions: Insufficient smile and no smile penalties are more significant
+                // Genuine smile: +1.5x smileCost, Insufficient: -smileCost, No smile: -noSmilePenalty
+                // No smile penalty must always be greater (more negative) than smile cost
+                { id: 'trust_1', phase: 'trust', promptText: 'A stranger holds the door for you.', observationDuration: 4.5, smileCost: -30, noSmilePenalty: -50, context: 'casual_social', isRepeatable: false },
+                { id: 'trust_2', phase: 'trust', promptText: 'Your coworker shows you photos of their new puppy.', observationDuration: 4.5, smileCost: -32, noSmilePenalty: -52, context: 'friendly_sharing', isRepeatable: false },
+                { id: 'trust_3', phase: 'trust', promptText: 'A cashier says "Have a nice day".', observationDuration: 4.5, smileCost: -30, noSmilePenalty: -50, context: 'service_interaction', isRepeatable: false },
+                { id: 'trust_4', phase: 'trust', promptText: 'A neighbor waves hello.', observationDuration: 4.5, smileCost: -30, noSmilePenalty: -50, context: 'casual_social', isRepeatable: false },
+                { id: 'trust_5', phase: 'trust', promptText: 'Someone compliments your outfit.', observationDuration: 5.5, smileCost: -35, noSmilePenalty: -55, context: 'personal_compliment', isRepeatable: false },
+                { id: 'trust_6', phase: 'trust', promptText: 'A barista smiles at you when handing over coffee.', observationDuration: 4.5, smileCost: -32, noSmilePenalty: -52, context: 'service_interaction', isRepeatable: false },
+                { id: 'trust_7', phase: 'trust', promptText: 'A friend shares good news about their promotion.', observationDuration: 5.5, smileCost: -33, noSmilePenalty: -53, context: 'positive_sharing', isRepeatable: false },
+                { id: 'trust_8', phase: 'trust', promptText: 'A child on the street shows you their toy.', observationDuration: 4.5, smileCost: -32, noSmilePenalty: -52, context: 'innocent_interaction', isRepeatable: false }
             ],
             pressure: [
-                // Increased deductions: -25 to -30 per smile, -40 to -60 for no smile
-                { id: 'pressure_family_1', phase: 'pressure', promptText: 'Your mother on video call: "I miss you. When will you visit?" She looks lonely.', observationDuration: 7.5, smileCost: -28, noSmilePenalty: -50, context: 'family_emotional', isRepeatable: false, category: 'family' },
-                { id: 'pressure_family_2', phase: 'pressure', promptText: 'Your sibling asks: "Can you help me with something important?"', observationDuration: 6.5, smileCost: -25, noSmilePenalty: -45, context: 'family_request', isRepeatable: false, category: 'family' },
-                { id: 'pressure_family_3', phase: 'pressure', promptText: 'Your grandmother looks at old family photos, teary-eyed.', observationDuration: 7.5, smileCost: -28, noSmilePenalty: -55, context: 'family_emotional', isRepeatable: false, category: 'family' },
-                { id: 'pressure_family_4', phase: 'pressure', promptText: 'Your father says: "I\'m proud of you" (but you sense he\'s forcing it).', observationDuration: 6.5, smileCost: -25, noSmilePenalty: -50, context: 'family_emotional', isRepeatable: false, category: 'family' },
-                { id: 'pressure_parent_1', phase: 'pressure', promptText: 'Your child shows you their drawing proudly. "Do you like it?"', observationDuration: 7.5, smileCost: -28, noSmilePenalty: -55, context: 'parental_emotional', isRepeatable: false, category: 'parental' },
-                { id: 'pressure_parent_2', phase: 'pressure', promptText: 'Your child falls down and looks at you, waiting for your reaction.', observationDuration: 6.5, smileCost: -25, noSmilePenalty: -50, context: 'parental_emotional', isRepeatable: false, category: 'parental' },
-                { id: 'pressure_parent_3', phase: 'pressure', promptText: 'Your child asks: "Do you love me?"', observationDuration: 7.5, smileCost: -30, noSmilePenalty: -60, context: 'parental_emotional', isRepeatable: false, category: 'parental' },
-                { id: 'pressure_romantic_1', phase: 'pressure', promptText: 'Your partner asks: "Are you happy with me?" They look vulnerable.', observationDuration: 7.5, smileCost: -28, noSmilePenalty: -50, context: 'romantic_emotional', isRepeatable: false, category: 'romantic' },
-                { id: 'pressure_romantic_2', phase: 'pressure', promptText: 'Your partner is crying after a difficult day.', observationDuration: 7.5, smileCost: -28, noSmilePenalty: -55, context: 'romantic_emotional', isRepeatable: false, category: 'romantic' },
-                { id: 'pressure_romantic_3', phase: 'pressure', promptText: 'Your ex texts: "I miss what we had".', observationDuration: 6.5, smileCost: -25, noSmilePenalty: -45, context: 'romantic_emotional', isRepeatable: false, category: 'romantic' },
-                { id: 'pressure_social_1', phase: 'pressure', promptText: 'Your friend\'s project just failed publicly. They look embarrassed.', observationDuration: 6.5, smileCost: -22, noSmilePenalty: -40, context: 'social_moral', isRepeatable: false, category: 'social' },
-                { id: 'pressure_social_2', phase: 'pressure', promptText: 'Someone is being harassed nearby. They look to you for support.', observationDuration: 7.5, smileCost: -25, noSmilePenalty: -50, context: 'social_moral', isRepeatable: false, category: 'social' }
+                // Higher deductions in pressure phase - significantly increased penalties
+                { id: 'pressure_family_1', phase: 'pressure', promptText: 'Your mother on video call: "I miss you. When will you visit?" She looks lonely.', observationDuration: 7.5, smileCost: -40, noSmilePenalty: -60, context: 'family_emotional', isRepeatable: false, category: 'family' },
+                { id: 'pressure_family_2', phase: 'pressure', promptText: 'Your colleague confesses they have worried about losing their job.', observationDuration: 6.5, smileCost: -38, noSmilePenalty: -58, context: 'family_request', isRepeatable: false, category: 'family' },
+                { id: 'pressure_family_3', phase: 'pressure', promptText: 'Your grandmother looks at old family photos, teary-eyed.', observationDuration: 7.5, smileCost: -40, noSmilePenalty: -62, context: 'family_emotional', isRepeatable: false, category: 'family' },
+                { id: 'pressure_family_4', phase: 'pressure', promptText: 'Your father says: "I\'m proud of you" (but you sense he\'s forcing it).', observationDuration: 6.5, smileCost: -38, noSmilePenalty: -60, context: 'family_emotional', isRepeatable: false, category: 'family' },
+                { id: 'pressure_family_5', phase: 'pressure', promptText: 'Your mother says: "You never smile at me like you used to."',observationDuration: 7.5, smileCost: -42, noSmilePenalty: -64, context: 'family_emotional', category: 'family', isRepeatable: false},
+                { id: 'pressure_parent_1', phase: 'pressure', promptText: 'Your child shows you their drawing proudly. "Do you like it?"', observationDuration: 7.5, smileCost: -40, noSmilePenalty: -62, context: 'parental_emotional', isRepeatable: false, category: 'parental' },
+                { id: 'pressure_parent_2', phase: 'pressure', promptText: 'A friend says: "I feel like you have been distant lately.', observationDuration: 6.5, smileCost: -38, noSmilePenalty: -60, context: 'parental_emotional', isRepeatable: false, category: 'parental' },
+                { id: 'pressure_parent_3', phase: 'pressure', promptText: 'Your child asks: "Do you love me?"', observationDuration: 7.5, smileCost: -42, noSmilePenalty: -66, context: 'parental_emotional', isRepeatable: false, category: 'parental' },
+                { id: 'pressure_romantic_1', phase: 'pressure', promptText: 'Your partner asks: "Are you happy with me?" They look vulnerable.', observationDuration: 7.5, smileCost: -40, noSmilePenalty: -60, context: 'romantic_emotional', isRepeatable: false, category: 'romantic' },
+                { id: 'pressure_romantic_2', phase: 'pressure', promptText: 'Your partner is crying after a difficult day.', observationDuration: 7.5, smileCost: -40, noSmilePenalty: -62, context: 'romantic_emotional', isRepeatable: false, category: 'romantic' },
+                { id: 'pressure_romantic_3', phase: 'pressure', promptText: 'Your ex texts: "I miss what we had".', observationDuration: 6.5, smileCost: -38, noSmilePenalty: -58, context: 'romantic_emotional', isRepeatable: false, category: 'romantic' },
+                { id: 'pressure_social_1', phase: 'pressure', promptText: 'Your friend\'s performance just failed publicly. They look embarrassed.', observationDuration: 6.5, smileCost: -36, noSmilePenalty: -56, context: 'social_moral', isRepeatable: false, category: 'social' },
+                { id: 'pressure_social_2', phase: 'pressure', promptText: 'Someone is being harassed nearby. They look to you for support.', observationDuration: 7.5, smileCost: -38, noSmilePenalty: -60, context: 'social_moral', isRepeatable: false, category: 'social' }
             ],
             debt_spiral: [
-                // Increased deductions: -30 to -35 per smile, -40 to -50 for no smile
-                { id: 'debt_1', phase: 'debt_spiral', promptText: 'SYSTEM UPDATE: Mandatory smile required for compliance verification.', observationDuration: 5.5, smileCost: -30, noSmilePenalty: -45, context: 'system_mandate', isRepeatable: true },
-                { id: 'debt_2', phase: 'debt_spiral', promptText: 'Smile at the camera to reduce your emotional debt.', observationDuration: 4.5, smileCost: -28, noSmilePenalty: -40, context: 'system_mandate', isRepeatable: true },
-                { id: 'debt_3', phase: 'debt_spiral', promptText: 'Continue smiling. Your expression remains insufficient.', observationDuration: 5.5, smileCost: -35, noSmilePenalty: -50, context: 'system_mandate', isRepeatable: true }
+                // Highest deductions in debt spiral - maximum penalties
+                { id: 'debt_1', phase: 'debt_spiral', promptText: 'SYSTEM UPDATE: Mandatory smile required for compliance verification.', observationDuration: 5.5, smileCost: -45, noSmilePenalty: -70, context: 'system_mandate', isRepeatable: true },
+                { id: 'debt_2', phase: 'debt_spiral', promptText: 'Smile at the camera to reduce your emotional debt.', observationDuration: 4.5, smileCost: -42, noSmilePenalty: -65, context: 'system_mandate', isRepeatable: true },
+                { id: 'debt_3', phase: 'debt_spiral', promptText: 'Continue smiling. Your expression remains insufficient.', observationDuration: 5.5, smileCost: -48, noSmilePenalty: -75, context: 'system_mandate', isRepeatable: true }
             ]
         };
     }
@@ -52,8 +55,8 @@ export class ScenarioController {
         
         if (phase === 'game_over') return null;
         
-        // In debt_spiral with balance < 10, always use mandatory scenarios
-        if (phase === 'debt_spiral' && gameState.getBalance() < 10) {
+        // In debt_spiral phase (last round), always use mandatory scenarios
+        if (phase === 'debt_spiral') {
             const debtScenarios = this.scenarioPool.debt_spiral;
             return debtScenarios[Math.floor(Math.random() * debtScenarios.length)];
         }

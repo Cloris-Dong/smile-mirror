@@ -344,12 +344,16 @@ export class GameUI {
     }
     
     // Update real-time status during observation
-    updateRealTimeStatus(smilingScore, balance, previousBalance, isGenuine = false) {
+    updateRealTimeStatus(smilingScore, balance, previousBalance, isGenuine = false, thresholds = null) {
         const statusEl = document.getElementById('status-indicator');
         const scoreEl = document.getElementById('status-score');
         const chargeEl = document.getElementById('status-charge');
         const balanceEl = document.getElementById('game-balance');
         if (!statusEl || !scoreEl || !chargeEl) return;
+        
+        // Use dynamic thresholds if provided, otherwise use defaults
+        const smileDetectedThreshold = thresholds?.smileDetected || 20;
+        const smileScoreThreshold = thresholds?.smileScore || 50;
         
         // Update status indicator (immersive dark theme)
         let statusText = '';
@@ -360,20 +364,20 @@ export class GameUI {
             statusText = 'No face detected';
             statusColor = 'rgba(255, 255, 255, 0.6)';
             charge = '--';
-        } else if (smilingScore < 20) {
+        } else if (smilingScore < smileDetectedThreshold) {
             statusText = 'No smile';
             statusColor = '#FF3B30';
             charge = `-${Math.abs(this.currentScenario?.noSmilePenalty || 0)}`;
-        } else if (smilingScore < 50 || !isGenuine) {
+        } else if (smilingScore < smileScoreThreshold || !isGenuine) {
             // Smiling but not genuine - show cost/risk
             statusText = 'Smile detected';
             statusColor = '#FF9500';
             charge = `-${Math.abs(this.currentScenario?.smileCost || 0)}`;
         } else {
-            // Genuine smile - show reward (cost already deducted, reward added)
+            // Genuine smile - show reward (1.5x the smileCost)
             statusText = 'Genuine smile';
             statusColor = '#34C759';
-            const reward = this.currentScenario ? Math.ceil(Math.abs(this.currentScenario.smileCost) * 0.25) : 0;
+            const reward = this.currentScenario ? Math.ceil(Math.abs(this.currentScenario.smileCost) * 1.5) : 0;
             charge = reward > 0 ? `+${reward}` : '0';
         }
         
@@ -891,14 +895,17 @@ export class GameUI {
                 ${momentsHTML ? momentsHTML.replace(/background: rgba\(255, 255, 255, 0\.05\);/g, 'background: rgba(255, 255, 255, 0.04);').replace(/border-radius: 8px;/g, 'border-radius: 16px;').replace(/color: #[a-f0-9]+/gi, 'color: rgba(255, 255, 255, 0.85)').replace(/border: 1px dotted #[a-f0-9]+;/gi, '').replace(/font-family: [^;]+;/g, "font-family: 'Courier New', 'Monaco', monospace;") : ''}
                 
                 <div style="
-                    margin-top: 32px;
-                    font-size: 11px;
-                    line-height: 1.6;
-                    color: rgba(255, 255, 255, 0.7);
-                    font-weight: 500;
-                    letter-spacing: 0.3em;
+                    margin-top: 56px;
+                    margin-bottom: 32px;
+                    padding: 40px 32px;
+                    font-size: 18px;
+                    line-height: 1.5;
+                    color: #fff;
+                    font-weight: 800;
+                    letter-spacing: 0.25em;
                     text-transform: uppercase;
                     text-align: center;
+                    animation: pulse-danger 2s ease-in-out infinite;
                 ">
                     THE SYSTEM NOW OWNS YOUR EMOTIONAL EXPRESSION.
                 </div>

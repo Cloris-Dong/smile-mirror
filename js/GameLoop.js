@@ -54,8 +54,8 @@ export class GameLoop {
     }
     
     async runGameLoop() {
-        // Game ends when balance goes negative or after 5 rounds
-        // With increased deductions, should naturally end in 3-5 rounds
+        // Game ends when balance goes negative (no round cap)
+        // Point values designed for ~4 rounds to game over
         while (this.isRunning && !this.gameState.isGameOver()) {
             // Select scenario
             this.currentScenario = this.scenarioController.selectScenario(this.gameState);
@@ -241,17 +241,20 @@ export class GameLoop {
                         
                         lastSmilingScore = currentMetrics.smilingScore;
                         
-                        // Check if genuine (simplified - intensity > 50 and symmetry > 40)
-                        isGenuine = currentMetrics.smilingScore > 50 && 
-                                   currentMetrics.facialSymmetry > 40 &&
-                                   currentMetrics.joyDetection > 45;
+                        // Get dynamic thresholds based on genuine smile count
+                        const thresholds = this.gameState.getGenuineSmileThresholds();
+                        
+                        // Check if genuine using dynamic thresholds
+                        isGenuine = currentMetrics.smilingScore >= thresholds.smileScore && 
+                                   currentMetrics.facialSymmetry >= thresholds.symmetry &&
+                                   currentMetrics.joyDetection >= thresholds.joy;
                         
                         // Calculate points that would be deducted based on current state
                         // This is just for display - actual deduction happens at end
                         let potentialDeduction = 0;
-                        if (currentMetrics.smilingScore < 20) {
+                        if (currentMetrics.smilingScore < thresholds.smileDetected) {
                             potentialDeduction = Math.abs(this.currentScenario.noSmilePenalty);
-                        } else if (currentMetrics.smilingScore < 50 || !isGenuine) {
+                        } else if (currentMetrics.smilingScore < thresholds.smileScore || !isGenuine) {
                             potentialDeduction = Math.abs(this.currentScenario.smileCost);
                         }
                         
@@ -262,7 +265,8 @@ export class GameLoop {
                                 currentMetrics.smilingScore,
                                 currentBalance,
                                 balanceBefore,
-                                isGenuine
+                                isGenuine,
+                                thresholds // Pass dynamic thresholds to UI
                             );
                             
                             lastUpdateTime = now;
@@ -302,8 +306,11 @@ export class GameLoop {
         const finalMetrics = this.mirror.calculateMetrics();
         const finalSmilingScore = finalMetrics ? finalMetrics.smilingScore : 0;
         
-        // Determine final state and deduct points once
-        if (finalSmilingScore < 20) {
+        // Get dynamic thresholds based on genuine smile count
+        const thresholds = this.gameState.getGenuineSmileThresholds();
+        
+        // Determine final state and apply points
+        if (finalSmilingScore < thresholds.smileDetected) {
             // No smile - apply penalty
             this.gameState.deductPoints(Math.abs(this.currentScenario.noSmilePenalty));
             
@@ -312,48 +319,38 @@ export class GameLoop {
                 finalSmilingScore,
                 this.gameState.getBalance(),
                 balanceBefore,
-                false
+                false,
+                thresholds
             );
-            } else if (finalSmilingScore >= 50 && finalMetrics.facialSymmetry > 40 && finalMetrics.joyDetection > 45) {
-                // Genuine smile - deduct cost FIRST, then add reward
-                // Step 1: Deduct cost (show the risk)
-                this.gameState.deductPoints(Math.abs(this.currentScenario.smileCost));
-                const balanceAfterCost = this.gameState.getBalance();
-                
-                // Show cost deduction first
-                this.gameUI.updateRealTimeStatus(
-                    finalSmilingScore,
-                    balanceAfterCost,
-                    balanceBefore,
-                    false // Show as not genuine first to display cost
-                );
-                
-                // Step 2: Wait a moment, then add reward
-                await this.delay(800); // Show cost for 800ms
-                
-                // More effective reward for genuine (25% of cost, increased from 8% to make rewards meaningful)
-                const reward = Math.ceil(Math.abs(this.currentScenario.smileCost) * 0.25);
-                this.gameState.addPoints(reward);
-                
-                // Show reward addition
-                this.gameUI.updateRealTimeStatus(
-                    finalSmilingScore,
-                    this.gameState.getBalance(),
-                    balanceAfterCost,
-                    true // Now show as genuine to display reward
-                );
-            } else {
-                // Insufficient smile - deduct cost
-                this.gameState.deductPoints(Math.abs(this.currentScenario.smileCost));
-                
-                // Update UI with cost deduction
-                this.gameUI.updateRealTimeStatus(
-                    finalSmilingScore,
-                    this.gameState.getBalance(),
-                    balanceBefore,
-                    false
-                );
-            }
+        } else if (finalSmilingScore >= thresholds.smileScore && 
+                   finalMetrics.facialSymmetry >= thresholds.symmetry && 
+                   finalMetrics.joyDetection >= thresholds.joy) {
+            // Genuine smile - EARN points (reward is 1.5x the smileCost to ensure net gain)
+            const reward = Math.ceil(Math.abs(this.currentScenario.smileCost) * 1.5);
+            this.gameState.addPoints(reward);
+            this.gameState.recordGenuineSmile(); // Track genuine smile for threshold increases
+            
+            // Show reward
+            this.gameUI.updateRealTimeStatus(
+                finalSmilingScore,
+                this.gameState.getBalance(),
+                balanceBefore,
+                true, // Show as genuine to display reward
+                thresholds
+            );
+        } else {
+            // Insufficient/fake smile - deduct cost
+            this.gameState.deductPoints(Math.abs(this.currentScenario.smileCost));
+            
+            // Update UI with cost deduction
+            this.gameUI.updateRealTimeStatus(
+                finalSmilingScore,
+                this.gameState.getBalance(),
+                balanceBefore,
+                false,
+                thresholds
+            );
+        }
     }
     
     async handleSkip() {
@@ -378,6 +375,55 @@ export class GameLoop {
                 this.gameState.getScenarioHistory()
             )
         );
+        
+        // Auto-restart after 5 seconds - return to beginning (measurement stage)
+        setTimeout(() => {
+            this.restartFromBeginning();
+        }, 5000);
+    }
+    
+    restartFromBeginning() {
+        console.log('Restarting experience from beginning...');
+        
+        // Stop the game loop
+        this.stop();
+        
+        // Clean up game container
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
+        
+        // Reset mirror to initial state (back to "I am human" measurement stage)
+        if (this.mirror) {
+            // Clean up game loop reference
+            this.mirror.gameLoop = null;
+            this.mirror.gameStarting = false;
+            
+            // Remove game container
+            if (this.mirror.gameContainer) {
+                this.mirror.gameContainer.remove();
+                this.mirror.gameContainer = null;
+            }
+            
+            // Restore mirror frame and video visibility
+            const mirrorFrame = document.querySelector('.mirror-frame');
+            if (mirrorFrame) {
+                mirrorFrame.style.opacity = '1';
+                mirrorFrame.style.visibility = 'visible';
+            }
+            
+            if (this.mirror.webcam) {
+                this.mirror.webcam.style.opacity = '1';
+                this.mirror.webcam.style.position = '';
+                this.mirror.webcam.style.top = '';
+                this.mirror.webcam.style.left = '';
+                this.mirror.webcam.style.zIndex = '';
+                this.mirror.webcam.style.pointerEvents = '';
+            }
+            
+            // Reset mirror to beginning
+            this.mirror.resetMirror();
+        }
     }
     
     stop() {
