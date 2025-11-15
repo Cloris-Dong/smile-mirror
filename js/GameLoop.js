@@ -95,8 +95,8 @@ export class GameLoop {
             // Wait for elements to be positioned before showing them
             await this.delay(50);
             
-            // Allow scenario prompt to display alone for 3 seconds before starting countdown
-            await this.delay(3000);
+            // Allow scenario prompt to display alone for 5 seconds before starting measurement status
+            await this.delay(5000);
             
             // Start passive observation
             const observationData = this.scenarioController.startPassiveObservation(
