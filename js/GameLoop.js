@@ -228,6 +228,12 @@ export class GameLoop {
                     // Perform face detection (updates landmarks)
                     const faceDetected = await this.mirror.performContinuousFacialDetection();
                     
+                    // Update face presence timestamp if face was detected
+                    // (performContinuousFacialDetection already updates it, but this ensures it's updated)
+                    if (faceDetected) {
+                        this.mirror.updateFacePresence();
+                    }
+                    
                     // Calculate current metrics
                     currentMetrics = this.mirror.calculateMetrics();
                     
@@ -427,6 +433,8 @@ export class GameLoop {
     }
     
     stop() {
+        console.log('[GAME CLEANUP] Stopping game loop...');
+        console.log('[GAME CLEANUP] Continuous face detection should continue running');
         this.isRunning = false;
         if (this.observationInterval) {
             clearInterval(this.observationInterval);

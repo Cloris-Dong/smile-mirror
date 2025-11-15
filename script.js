@@ -113,6 +113,13 @@ class DigitalMirror {
         this.maxRetries = 5;
         this.retryDelay = 2000; // 2 seconds between retries
         
+        // Global face presence monitoring
+        this.lastFaceDetectedTime = Date.now();
+        this.facePresenceCheckInterval = null;
+        this.faceAbsenceTimeout = 5000; // 5 seconds without face triggers restart
+        this.continuousFaceDetectionInterval = null; // Separate loop for continuous face detection
+        this.lastDetectionLogTime = 0; // For throttling detection logs
+        
         this.init();
     }
     
@@ -126,9 +133,11 @@ class DigitalMirror {
             await this.setupWebcam();
             await this.setupAudioDetection();
             await this.setupFacialDetection();
+            this.startContinuousFacePresenceDetection(); // Start continuous face detection loop (independent of overlay)
             this.setupEventListeners();
             this.setupFallbackControls();
             this.startDistortionLoop();
+            this.startFacePresenceMonitoring(); // Start global face presence monitoring
             // Always add test button for easy testing
             this.addTestButton();
             // Add debug button to skip smile measurement
@@ -1164,6 +1173,9 @@ class DigitalMirror {
                     // Extract and process landmarks
                     this.extractLandmarks(face);
                     
+                    // Update face presence timestamp
+                    this.updateFacePresence();
+                    
                     console.log(`Face detected with ${this.realLandmarks.length} landmarks`);
                     return true;
                 } else {
@@ -2077,7 +2089,8 @@ class DigitalMirror {
         
         try {
             this.gameStarting = true;
-            console.log('Starting Emotional Economics Game...');
+            console.log('[GAME START] Starting Emotional Economics Game...');
+            console.log('[GAME START] Continuous face detection should continue running');
             
             // Add debug button to skip intro
             this.addDebugSkipButton();
@@ -2089,6 +2102,7 @@ class DigitalMirror {
             }
             
             // Hide overlay and stop analysis
+            // NOTE: This does NOT stop continuous face detection - that runs independently
             this.stopOverlayUpdates();
             this.isAnalyzing = false;
             if (this.analysisTimer) {
@@ -2098,6 +2112,14 @@ class DigitalMirror {
             
             // Stop listening
             this.stopListening();
+            
+            // Verify continuous face detection is still running
+            if (this.continuousFaceDetectionInterval) {
+                console.log('[GAME START] Continuous face detection loop is running (interval ID:', this.continuousFaceDetectionInterval, ')');
+            } else {
+                console.warn('[GAME START] WARNING: Continuous face detection loop is NOT running! Restarting...');
+                this.startContinuousFacePresenceDetection();
+            }
             
             // Create game container if it doesn't exist
             if (!this.gameContainer) {
@@ -2187,6 +2209,10 @@ class DigitalMirror {
                 if (this.webcam.paused) {
                     this.webcam.play().catch(err => console.error('Error playing video:', err));
                 }
+                
+                // Verify video dimensions are intact for face detection
+                console.log('[GAME START] Webcam dimensions:', this.webcam.videoWidth, 'x', this.webcam.videoHeight);
+                console.log('[GAME START] Continuous face detection loop should still be running');
             }
             
             // Hide distortion canvas
@@ -2619,23 +2645,12 @@ class DigitalMirror {
             clearTimeout(this.resetCountdownTimer);
         }
         
-        let countdown = 3;
-        
-        const updateCountdown = () => {
-            if (countdown > 0) {
-                this.updateAIMessage(`Retrying in ${countdown}...`);
-                countdown--;
-                this.resetCountdownTimer = setTimeout(updateCountdown, 1000);
-            } else {
-                this.updateAIMessage('Restarting experience...');
-                this.resetCountdownTimer = setTimeout(() => {
-                    // Refresh the page to restart the entire experience
-                    window.location.reload();
-                }, 1000);
-            }
-        };
-        
-        updateCountdown();
+        // Show message and restart after a short delay (no countdown)
+        this.updateAIMessage('No face detected. Restarting experience...');
+        this.resetCountdownTimer = setTimeout(() => {
+            // Refresh the page to restart the entire experience
+            window.location.reload();
+        }, 1500); // 1.5 second delay before restart
     }
     
     // Add user interaction prompt for autoplay
@@ -2824,6 +2839,12 @@ class DigitalMirror {
         this.humanityLevel.textContent = 'Welcome';
         this.updateAIMessage('Welcome. To begin, simply say "I am human"', false);
         
+        // Restart continuous face detection (if not already running)
+        this.startContinuousFacePresenceDetection();
+        
+        // Restart face presence monitoring
+        this.startFacePresenceMonitoring();
+        
         console.log('Mirror reset complete - back to initial state');
     }
     
@@ -2958,7 +2979,165 @@ class DigitalMirror {
         }
     }
 
-    // Cleanup method
+    // Continuous face detection loop for presence monitoring (independent of overlay)
+    startContinuousFacePresenceDetection() {
+        // Stop any existing detection loop
+        this.stopContinuousFacePresenceDetection();
+        
+        // Wait for model to be loaded before starting
+        const startDetection = () => {
+            if (!this.isModelLoaded || !this.model || !this.webcam) {
+                // Retry after a short delay if model not ready
+                setTimeout(startDetection, 500);
+                return;
+            }
+            
+            // Run detection at ~10 FPS (every 100ms)
+            // This loop runs INDEPENDENTLY of:
+            // - Overlay visibility
+            // - Game state
+            // - UI state
+            // - Any other visual elements
+            // It ONLY stops during cleanup() or restartExperienceDueToFaceAbsence()
+            this.continuousFaceDetectionInterval = setInterval(async () => {
+                await this.detectFaceForPresence();
+            }, 100);
+            
+            console.log('[FACE DETECTION] Continuous face presence detection started - will run independently of UI state');
+        };
+        
+        startDetection();
+    }
+    
+    stopContinuousFacePresenceDetection() {
+        if (this.continuousFaceDetectionInterval) {
+            clearInterval(this.continuousFaceDetectionInterval);
+            this.continuousFaceDetectionInterval = null;
+        }
+    }
+    
+    // Lightweight face detection - only checks for face existence, doesn't process landmarks
+    async detectFaceForPresence() {
+        try {
+            // Check if webcam is available and has valid dimensions
+            // This should work even when video is visually hidden (opacity:0, z-index:-1)
+            if (!this.isModelLoaded || !this.model || !this.webcam) {
+                return; // Model or webcam not ready yet
+            }
+            
+            // Check video dimensions - must be > 0 for TensorFlow.js to work
+            if (this.webcam.videoWidth === 0 || this.webcam.videoHeight === 0) {
+                // Video not ready yet, skip this detection cycle
+                return;
+            }
+            
+            // Use estimateFaces with minimal options for faster detection
+            // This works even when video is visually hidden as long as it's in DOM and has dimensions
+            const faces = await this.model.estimateFaces(this.webcam, {
+                flipHorizontal: false,
+                returnTensors: false,
+                refineLandmarks: false // Don't need landmarks for presence detection
+            });
+            
+            const faceFound = faces.length > 0;
+            
+            // Log detection status (throttled to avoid spam)
+            if (!this.lastDetectionLogTime || Date.now() - this.lastDetectionLogTime > 2000) {
+                console.log(`[FACE DETECTION] Running, face found: ${faceFound}, video: ${this.webcam.videoWidth}x${this.webcam.videoHeight}`);
+                this.lastDetectionLogTime = Date.now();
+            }
+            
+            if (faceFound) {
+                // Face detected - update presence timestamp
+                this.updateFacePresence();
+            }
+        } catch (error) {
+            // Log errors but don't spam - only log unique errors
+            if (error.message && !error.message.includes('already started')) {
+                console.error('[FACE DETECTION] Error:', error.message);
+            }
+        }
+    }
+    
+    // Global face presence monitoring methods
+    startFacePresenceMonitoring() {
+        // Stop any existing monitoring
+        this.stopFacePresenceMonitoring();
+        
+        // Initialize timestamp
+        this.lastFaceDetectedTime = Date.now();
+        
+        // Check every second if face has been absent for too long
+        this.facePresenceCheckInterval = setInterval(() => {
+            this.checkFacePresence();
+        }, 1000);
+        
+        console.log('Face presence monitoring started');
+    }
+    
+    stopFacePresenceMonitoring() {
+        if (this.facePresenceCheckInterval) {
+            clearInterval(this.facePresenceCheckInterval);
+            this.facePresenceCheckInterval = null;
+        }
+    }
+    
+    updateFacePresence() {
+        // Update timestamp whenever a face is detected
+        this.lastFaceDetectedTime = Date.now();
+    }
+    
+    checkFacePresence() {
+        const timeSinceLastFace = Date.now() - this.lastFaceDetectedTime;
+        
+        if (timeSinceLastFace >= this.faceAbsenceTimeout) {
+            console.log(`No face detected for ${timeSinceLastFace}ms - restarting experience`);
+            this.restartExperienceDueToFaceAbsence();
+        }
+    }
+    
+    restartExperienceDueToFaceAbsence() {
+        console.log('[FACE ABSENCE] Restarting experience due to face absence...');
+        
+        // Stop face presence monitoring temporarily
+        this.stopFacePresenceMonitoring();
+        
+        // Stop continuous face detection temporarily (will restart after reset)
+        this.stopContinuousFacePresenceDetection();
+        console.log('[FACE ABSENCE] Stopped continuous face detection (will restart after reset)');
+        
+        // Stop game loop if running
+        if (this.gameLoop) {
+            this.gameLoop.stop();
+            // Clean up game container
+            if (this.gameContainer) {
+                this.gameContainer.remove();
+                this.gameContainer = null;
+            }
+            this.gameLoop = null;
+            this.gameStarting = false;
+        }
+        
+        // Restore mirror frame and video visibility
+        const mirrorFrame = document.querySelector('.mirror-frame');
+        if (mirrorFrame) {
+            mirrorFrame.style.opacity = '1';
+            mirrorFrame.style.visibility = 'visible';
+        }
+        
+        if (this.webcam) {
+            this.webcam.style.opacity = '1';
+            this.webcam.style.position = '';
+            this.webcam.style.top = '';
+            this.webcam.style.left = '';
+            this.webcam.style.zIndex = '';
+            this.webcam.style.pointerEvents = '';
+        }
+        
+        // Reset mirror to beginning (this will restart continuous detection and monitoring)
+        this.resetMirror();
+    }
+    
     cleanup() {
         this.stopListening();
         
@@ -2969,6 +3148,12 @@ class DigitalMirror {
         
         // Clear overlay updates
         this.stopOverlayUpdates();
+        
+        // Stop continuous face detection
+        this.stopContinuousFacePresenceDetection();
+        
+        // Stop face presence monitoring
+        this.stopFacePresenceMonitoring();
         
         if (this.audioContext) {
             this.audioContext.close();
