@@ -8,7 +8,6 @@ class DigitalMirror {
         this.overlay = document.getElementById('overlay');
         this.humanityLevel = document.getElementById('humanity-level');
         this.cleanInstruction = document.getElementById('clean-instruction');
-        this.listeningIndicator = document.getElementById('listening-indicator');
         this.captchaOverlay = document.getElementById('captcha-overlay');
         this.captchaCanvas = document.getElementById('captcha-canvas');
         this.captchaInput = document.getElementById('captcha-input');
@@ -131,7 +130,21 @@ class DigitalMirror {
             console.log('faceLandmarksDetection available:', typeof faceLandmarksDetection !== 'undefined');
             
             await this.setupWebcam();
+            
+            // Check URL parameter for ASR mode: ?asr=local or ?asr=webspeech
+            const urlParams = new URLSearchParams(window.location.search);
+            const asrMode = urlParams.get('asr') || 'local'; // Default to local
+            
+            console.log(`ASR mode: ${asrMode}`);
+            
+            if (asrMode === 'webspeech') {
+                // Use Web Speech API
             await this.setupAudioDetection();
+            } else {
+                // Use local ASR (default)
+                this.setupLocalASR();
+            }
+            
             await this.setupFacialDetection();
             this.startContinuousFacePresenceDetection(); // Start continuous face detection loop (independent of overlay)
             this.setupEventListeners();
@@ -288,6 +301,400 @@ class DigitalMirror {
         }
     }
     
+    async setupLocalASR() {
+        // Local ASR WebSocket setup - runs alongside Web Speech API
+        const WS_URL = 'ws://localhost:8765';
+        const TARGET_SAMPLE_RATE = 16000;
+        const CHANNELS = 1;
+        const FRAME_SIZE_MS = 20;
+        const SAMPLES_PER_FRAME = Math.floor(TARGET_SAMPLE_RATE * FRAME_SIZE_MS / 1000); // 320 samples
+        const BYTES_PER_FRAME = SAMPLES_PER_FRAME * 2; // PCM16 = 2 bytes per sample
+        
+        // Local ASR state
+        this.localASR = {
+            ws: null,
+            audioContext: null,
+            sourceNode: null,
+            processorNode: null, // AudioWorkletNode or ScriptProcessorNode (fallback)
+            stream: null,
+            reconnectTimer: null,
+            reconnectAttempts: 0,
+            maxReconnectAttempts: Infinity, // Retry forever
+            reconnectDelay: 1000, // 1 second
+            isConnected: false,
+            isStreaming: false
+        };
+        
+        const connectWebSocket = async () => {
+            try {
+                console.log('Attempting to connect to local ASR service...');
+                this.showListeningIndicator('Connecting to speech service...');
+                this.localASR.ws = new WebSocket(WS_URL);
+                
+                this.localASR.ws.onopen = () => {
+                    console.log('Local ASR WebSocket connected');
+                    this.localASR.isConnected = true;
+                    this.localASR.reconnectAttempts = 0;
+                    
+                    // Clear status indicator - will be updated by VAD events
+                    this.showListeningIndicator('');
+                    
+                    // Only start microphone streaming when WS is open
+                    startMicrophoneStream();
+                };
+                
+                this.localASR.ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        console.log('Local ASR message:', message);
+                        
+                        if (message.type === 'vad') {
+                            if (message.state === 'speech_start') {
+                                this.showListeningIndicator('Listening...');
+                            } else if (message.state === 'speech_end') {
+                                this.showListeningIndicator('Processing...');
+                            }
+                        } else if (message.type === 'transcript') {
+                            const transcript = message.text;
+                            console.log('[ASR]', transcript);
+                            
+                            // Use existing detectHumanPhrase and processHumanClaim
+                            if (this.detectHumanPhrase(transcript.toLowerCase().trim())) {
+                                console.log('[ASR] Human phrase detected');
+                                this.processHumanClaim();
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error parsing local ASR message:', error);
+                    }
+                };
+                
+                this.localASR.ws.onerror = (error) => {
+                    console.error('Local ASR WebSocket error:', error);
+                };
+                
+                this.localASR.ws.onclose = () => {
+                    console.log('Local ASR WebSocket closed');
+                    const wasConnected = this.localASR.isConnected;
+                    this.localASR.isConnected = false;
+                    
+                    // Stop sending audio immediately and clean up resources
+                    stopMicrophoneStream();
+                    
+                    // Show offline status
+                    this.showListeningIndicator('Speech service offline (press Space)');
+                    
+                    // Only attempt reconnection if we were previously connected and haven't been stopped
+                    // (don't reconnect if we're shutting down)
+                    if (wasConnected && this.localASR.reconnectAttempts < this.localASR.maxReconnectAttempts && this.localASR) {
+                        this.localASR.reconnectAttempts++;
+                        console.log(`Reconnecting to local ASR (attempt ${this.localASR.reconnectAttempts})...`);
+                        
+                        // Show connecting status during reconnection
+                        this.showListeningIndicator('Connecting to speech service...');
+                        
+                        // Clear any existing reconnect timer
+                        if (this.localASR.reconnectTimer) {
+                            clearTimeout(this.localASR.reconnectTimer);
+                        }
+                        
+                        this.localASR.reconnectTimer = setTimeout(() => {
+                            // Only reconnect if localASR still exists and hasn't been cleaned up
+                            // Also ensure no active stream exists (double-check before reconnecting)
+                            if (this.localASR && !this.localASR.isStreaming && !this.localASR.audioContext) {
+                                connectWebSocket();
+                            }
+                        }, this.localASR.reconnectDelay);
+                    } else if (!wasConnected) {
+                        // Initial connection failed - enable fallback
+                        enableFallback();
+                    }
+                };
+                
+            } catch (error) {
+                console.error('Failed to connect to local ASR service:', error);
+                this.localASR.isConnected = false;
+                this.showListeningIndicator('Speech service offline (press Space)');
+                enableFallback();
+            }
+        };
+        
+        const startMicrophoneStream = async () => {
+            // Ensure only one stream at a time
+            if (this.localASR.isStreaming) {
+                console.log('Local ASR: Microphone stream already active, skipping');
+                return;
+            }
+            
+            // Ensure no existing AudioContext or MediaStream before creating new ones
+            if (this.localASR.audioContext || this.localASR.stream) {
+                console.log('Local ASR: Existing audio resources detected, cleaning up first...');
+                stopMicrophoneStream();
+                // Small delay to ensure cleanup completes
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            if (!this.localASR.isConnected) {
+                console.log('Local ASR: WebSocket not connected, skipping microphone start');
+                return;
+            }
+            
+            try {
+                // Get user media
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: CHANNELS,
+                        sampleRate: TARGET_SAMPLE_RATE,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                this.localASR.stream = stream;
+                
+                // Create AudioContext with target sample rate
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: TARGET_SAMPLE_RATE
+                });
+                
+                this.localASR.audioContext = audioContext;
+                
+                // Create source node from stream
+                const sourceNode = audioContext.createMediaStreamSource(stream);
+                this.localASR.sourceNode = sourceNode;
+                
+                // Load and create AudioWorklet processor
+                try {
+                    await audioContext.audioWorklet.addModule('audio-processor.js');
+                    
+                    // Create AudioWorkletNode
+                    const processorNode = new AudioWorkletNode(audioContext, 'audio-processor');
+                    
+                    // Handle messages from the worklet (PCM16 frames)
+                    processorNode.port.onmessage = (event) => {
+                        if (event.data.type === 'audioFrame') {
+                            // Stop processing if not connected or WebSocket is closed
+                            if (!this.localASR.isConnected || !this.localASR.ws || this.localASR.ws.readyState !== WebSocket.OPEN) {
+                                return;
+                            }
+                            
+                            // Send frame over WebSocket
+                            if (this.localASR.ws && this.localASR.ws.readyState === WebSocket.OPEN) {
+                                this.localASR.ws.send(event.data.data);
+                            }
+                        }
+                    };
+                    
+                    // Connect nodes
+                    sourceNode.connect(processorNode);
+                    // AudioWorklet doesn't need to connect to destination
+                    
+                    this.localASR.processorNode = processorNode;
+                    this.localASR.isStreaming = true;
+                    
+                    console.log('Local ASR microphone stream started (AudioWorklet)');
+                    
+                } catch (error) {
+                    console.error('Failed to load AudioWorklet, falling back to ScriptProcessorNode:', error);
+                    
+                    // Fallback to ScriptProcessorNode if AudioWorklet fails
+                    const bufferSize = 512; // Power of 2
+                    const processorNode = audioContext.createScriptProcessor(bufferSize, CHANNELS, CHANNELS);
+                    
+                    processorNode.onaudioprocess = (event) => {
+                        if (!this.localASR.isConnected || !this.localASR.ws || this.localASR.ws.readyState !== WebSocket.OPEN) {
+                            return;
+                        }
+                        
+                        const inputBuffer = event.inputBuffer;
+                        const inputData = inputBuffer.getChannelData(0);
+                        let samples = Array.from(inputData);
+                        
+                        const actualSampleRate = audioContext.sampleRate;
+                        if (actualSampleRate !== TARGET_SAMPLE_RATE) {
+                            samples = resampleAudio(samples, actualSampleRate, TARGET_SAMPLE_RATE);
+                        }
+                        
+                        // Simple frame processing for fallback
+                        const frameSamples = samples.slice(0, SAMPLES_PER_FRAME);
+                        const pcm16Buffer = new ArrayBuffer(BYTES_PER_FRAME);
+                        const pcm16View = new Int16Array(pcm16Buffer);
+                        
+                        for (let i = 0; i < frameSamples.length; i++) {
+                            const sample = Math.max(-1, Math.min(1, frameSamples[i]));
+                            pcm16View[i] = Math.max(-32768, Math.min(32767, Math.round(sample * 32768)));
+                        }
+                        
+                        if (this.localASR.ws && this.localASR.ws.readyState === WebSocket.OPEN) {
+                            this.localASR.ws.send(pcm16Buffer);
+                        }
+                    };
+                    
+                    sourceNode.connect(processorNode);
+                    processorNode.connect(audioContext.destination);
+                    
+                    this.localASR.processorNode = processorNode;
+                    this.localASR.isStreaming = true;
+                    
+                    console.log('Local ASR microphone stream started (ScriptProcessorNode fallback)');
+                }
+                
+            } catch (error) {
+                console.error('Failed to start microphone stream:', error);
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    console.error('Microphone permission denied');
+                }
+                enableFallback();
+            }
+        };
+        
+        const stopMicrophoneStream = () => {
+            // Stop processor node first
+            if (this.localASR.processorNode) {
+                try {
+                    this.localASR.processorNode.disconnect();
+                } catch (e) {
+                    // Already disconnected, ignore
+                }
+                this.localASR.processorNode = null;
+            }
+            
+            // Stop source node
+            if (this.localASR.sourceNode) {
+                try {
+                    this.localASR.sourceNode.disconnect();
+                } catch (e) {
+                    // Already disconnected, ignore
+                }
+                this.localASR.sourceNode = null;
+            }
+            
+            // Stop all media tracks
+            if (this.localASR.stream) {
+                this.localASR.stream.getTracks().forEach(track => {
+                    track.stop();
+                });
+                this.localASR.stream = null;
+            }
+            
+            // Close audio context
+            if (this.localASR.audioContext) {
+                if (this.localASR.audioContext.state !== 'closed') {
+                    this.localASR.audioContext.close().catch(console.error);
+                }
+                this.localASR.audioContext = null;
+            }
+            
+            this.localASR.isStreaming = false;
+            
+            console.log('Local ASR microphone stream stopped');
+        };
+        
+        const enableFallback = () => {
+            console.log('Local ASR service unavailable, enabling fallback controls');
+            this.showListeningIndicator('Speech service offline (press Space)');
+            
+            // Enable fallback controls (spacebar/click)
+            if (!this.fallbackActive) {
+                this.enableFallbackControls();
+            }
+        };
+        
+        const resampleAudio = (samples, fromRate, toRate) => {
+            if (fromRate === toRate) {
+                return samples;
+            }
+            
+            const ratio = fromRate / toRate;
+            const newLength = Math.round(samples.length / ratio);
+            const result = new Array(newLength);
+            
+            for (let i = 0; i < newLength; i++) {
+                const srcIndex = i * ratio;
+                const srcIndexFloor = Math.floor(srcIndex);
+                const srcIndexCeil = Math.min(srcIndexFloor + 1, samples.length - 1);
+                const t = srcIndex - srcIndexFloor;
+                
+                // Linear interpolation
+                result[i] = samples[srcIndexFloor] * (1 - t) + samples[srcIndexCeil] * t;
+            }
+            
+            return result;
+        };
+        
+        // Store stopMicrophoneStream reference so it can be called from stopLocalASR
+        this.localASR._stopMicrophoneStream = stopMicrophoneStream;
+        
+        // Start connection
+        connectWebSocket();
+    }
+    
+    stopLocalASR() {
+        // Stop local ASR completely - called from cleanup() and on page refresh
+        if (!this.localASR) {
+            return;
+        }
+        
+        console.log('Stopping local ASR...');
+        
+        // Clear reconnect timer first to prevent reconnection attempts
+        if (this.localASR.reconnectTimer) {
+            clearTimeout(this.localASR.reconnectTimer);
+            this.localASR.reconnectTimer = null;
+        }
+        
+        // Close WebSocket
+        if (this.localASR.ws) {
+            try {
+                // Remove event handlers to prevent reconnection
+                this.localASR.ws.onopen = null;
+                this.localASR.ws.onmessage = null;
+                this.localASR.ws.onerror = null;
+                this.localASR.ws.onclose = null;
+                this.localASR.ws.close();
+            } catch (e) {
+                console.error('Error closing WebSocket:', e);
+            }
+            this.localASR.ws = null;
+        }
+        
+        // Stop microphone stream and close AudioContext
+        if (this.localASR._stopMicrophoneStream) {
+            this.localASR._stopMicrophoneStream();
+        } else {
+            // Fallback cleanup if method reference is not available
+            if (this.localASR.processorNode) {
+                try {
+                    this.localASR.processorNode.disconnect();
+                } catch (e) {}
+                this.localASR.processorNode = null;
+            }
+            
+            if (this.localASR.sourceNode) {
+                try {
+                    this.localASR.sourceNode.disconnect();
+                } catch (e) {}
+                this.localASR.sourceNode = null;
+            }
+            
+            if (this.localASR.stream) {
+                this.localASR.stream.getTracks().forEach(track => track.stop());
+                this.localASR.stream = null;
+            }
+            
+            if (this.localASR.audioContext && this.localASR.audioContext.state !== 'closed') {
+                this.localASR.audioContext.close().catch(console.error);
+                this.localASR.audioContext = null;
+            }
+        }
+        
+        this.localASR.isConnected = false;
+        this.localASR.isStreaming = false;
+        
+        console.log('Local ASR stopped');
+    }
+    
     async setupSpeechRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         this.recognition = new SpeechRecognition();
@@ -361,7 +768,7 @@ class DigitalMirror {
     }
     
     detectHumanPhrase(transcript) {
-        // Check for various forms of "I am human"
+        // Check for various forms of "I am human" and "I'm human"
         const humanPhrases = [
             'i am human',
             'i am a human',
@@ -371,7 +778,27 @@ class DigitalMirror {
             'i am the human being',
             'i am human person',
             'i am a human person',
-            'i am the human person'
+            'i am the human person',
+            // Contractions
+            "i'm human",
+            "i'm a human",
+            "i'm the human",
+            "i'm human being",
+            "i'm a human being",
+            "i'm the human being",
+            "i'm human person",
+            "i'm a human person",
+            "i'm the human person",
+            // Without apostrophe (speech recognition might not include it)
+            'im human',
+            'im a human',
+            'im the human',
+            'im human being',
+            'im a human being',
+            'im the human being',
+            'im human person',
+            'im a human person',
+            'im the human person'
         ];
         
         return humanPhrases.some(phrase => transcript.includes(phrase));
@@ -475,9 +902,10 @@ class DigitalMirror {
     }
     
     showListeningIndicator(text) {
-        if (this.listeningIndicator) {
-            this.listeningIndicator.textContent = text;
-            this.listeningIndicator.style.display = text ? 'block' : 'none';
+        // Indicator removed - function kept for compatibility
+        // Status messages are still logged to console for debugging
+        if (text) {
+            console.log('[ListeningIndicator]', text);
         }
     }
     
@@ -3140,6 +3568,9 @@ class DigitalMirror {
     
     cleanup() {
         this.stopListening();
+        
+        // Stop local ASR (includes microphone tracks and AudioContext cleanup)
+        this.stopLocalASR();
         
         // Clear analysis timer
         if (this.analysisTimer) {
