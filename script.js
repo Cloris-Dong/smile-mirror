@@ -2556,7 +2556,9 @@ class DigitalMirror {
                 let containerStyle = `
                     position: fixed;
                     z-index: 10000;
-                    background: #000;
+                    background: rgba(0, 0, 0, 0.4);
+                    backdrop-filter: blur(20px);
+                    -webkit-backdrop-filter: blur(20px);
                 `;
                 
                 if (mirrorFrame) {
@@ -2611,62 +2613,21 @@ class DigitalMirror {
                 this.overlay.style.display = 'none';
             }
             
-            // Hide mirror frame and video so participants don't see themselves
-            const mirrorFrame = document.querySelector('.mirror-frame');
-            if (mirrorFrame) {
-                mirrorFrame.style.opacity = '0';
-                mirrorFrame.style.visibility = 'hidden';
+            // Keep mirror frame and video visible so they show through the blurred game container as background
+            if (this.webcam && this.webcam.paused) {
+                this.webcam.play().catch(err => console.error('Error playing video:', err));
             }
             
-            // Keep video element active but visually hidden for face detection
-            // Don't use display: none as it breaks TensorFlow.js face detection
-            // TensorFlow.js needs the video element to have proper dimensions and be in the DOM
-            if (this.webcam) {
-                // Keep video at full size for TensorFlow.js but make it invisible
-                this.webcam.style.opacity = '0';
-                this.webcam.style.position = 'absolute';
-                this.webcam.style.top = '0';
-                this.webcam.style.left = '0';
-                // Keep original dimensions for TensorFlow.js face detection
-                // Don't change width/height - TensorFlow needs proper video dimensions
-                this.webcam.style.zIndex = '-1';
-                this.webcam.style.pointerEvents = 'none';
-                this.webcam.style.visibility = 'visible'; // Keep visible to DOM for TensorFlow
-                this.webcam.style.display = 'block'; // Keep as block for TensorFlow
-                // Ensure video is still playing
-                if (this.webcam.paused) {
-                    this.webcam.play().catch(err => console.error('Error playing video:', err));
-                }
-                
-                // Verify video dimensions are intact for face detection
-                console.log('[GAME START] Webcam dimensions:', this.webcam.videoWidth, 'x', this.webcam.videoHeight);
-                console.log('[GAME START] Continuous face detection loop should still be running');
-            }
-            
-            // Hide distortion canvas
+            // Hide distortion and overlay canvases so background is clean camera feed
             if (this.canvas) {
                 this.canvas.style.opacity = '0';
                 this.canvas.style.position = 'absolute';
                 this.canvas.style.zIndex = '-1';
             }
-            
-            // Hide facial overlay canvas if it exists
             if (this.facialOverlay) {
                 this.facialOverlay.style.opacity = '0';
                 this.facialOverlay.style.position = 'absolute';
                 this.facialOverlay.style.zIndex = '-1';
-            }
-            
-            // Hide mirror surface visually but keep it active
-            const mirrorSurface = document.querySelector('.mirror-surface');
-            if (mirrorSurface) {
-                mirrorSurface.style.opacity = '0';
-                mirrorSurface.style.pointerEvents = 'none';
-            }
-            
-            // Ensure game container has black background
-            if (this.gameContainer) {
-                this.gameContainer.style.background = '#000';
             }
             
             // Start the game

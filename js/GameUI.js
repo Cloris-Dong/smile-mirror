@@ -46,7 +46,7 @@ export class GameUI {
                 will-change: opacity, transform;
                 padding: 14px 28px;
                 border-radius: 999px;
-                background: rgba(255, 255, 255, 0.08);
+                background: rgba(30, 30, 30, 0.33);
                 backdrop-filter: blur(20px);
                 font-family: 'Courier New', 'Monaco', monospace;
                 color: #fff;
@@ -163,26 +163,89 @@ export class GameUI {
         }
     }
     
-    // Display scenario screen with real-time status
+    // Display scenario screen with balance, expression bar (3 zones), and prompt card
     displayScenario(scenario, balance, skipCallback) {
         const balanceHTML = this.displayBalance(balance);
-        
-        // No skip button - immersive experience, no user interaction
-        // const skipButtonId = 'skip-button-' + Date.now();
-        // this.skipCallback = skipCallback;
-        // this.skipButtonId = skipButtonId;
-        
+        // Expression bar: three zones — no smile (0–20), smile detected (20–50), genuine smile (50–100). Width set to match prompt card in reveal timeout.
+        const barHTML = `
+            <div id="expression-progress-wrap" style="
+                position: absolute;
+                top: 108px;
+                left: 50%;
+                transform: translate(-50%, 0);
+                width: min(74vw, 820px);
+                z-index: 1199;
+                opacity: 0;
+                will-change: opacity;
+                font-family: 'Courier New', 'Monaco', monospace;
+            ">
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 8px;
+                ">
+                    <span style="
+                        font-size: 12px;
+                        letter-spacing: 0.32em;
+                        text-transform: uppercase;
+                        color: rgba(255, 255, 255, 0.95);
+                    ">Expression score</span>
+                    <span id="expression-score-value" style="
+                        font-size: 22px;
+                        font-weight: 600;
+                        color: #fff;
+                        letter-spacing: 0.02em;
+                        min-width: 2ch;
+                    ">--</span>
+                </div>
+                <div style="
+                    height: 14px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.1);
+                    overflow: hidden;
+                    position: relative;
+                    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+                ">
+                    <div id="expression-progress-fill" style="
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        bottom: 0;
+                        width: 0%;
+                        background: #9EC0E0;
+                        border-radius: 999px;
+                        transition: width 0.2s ease-out;
+                    "></div>
+                    <div style="position: absolute; left: 20%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.45); pointer-events: none;"></div>
+                    <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.45); pointer-events: none;"></div>
+                </div>
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    margin-top: 6px;
+                    padding: 0 2%;
+                ">
+                    <span style="font-size: 11px; letter-spacing: 0.04em; color: rgba(255,255,255,0.92); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;">No smile</span>
+                    <span style="font-size: 11px; letter-spacing: 0.04em; color: rgba(255,255,255,0.92); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;">Smile detected</span>
+                    <span style="font-size: 11px; letter-spacing: 0.04em; color: rgba(255,255,255,0.92); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;">Genuine smile</span>
+                </div>
+            </div>
+        `;
         return `
+            ${balanceHTML}
+            ${barHTML}
             <div id="scenario-header" style="
                 position: absolute;
                 top: 44%;
                 left: 50%;
                 transform: translate(-50%, -50%);
                 width: min(88%, 920px);
-                padding: 58px;
+                padding: 52px 56px 64px;
+                min-height: 160px;
                 border-radius: 36px;
-                background: rgba(12, 12, 12, 0.84);
-                box-shadow: 0 50px 110px rgba(0, 0, 0, 0.55);
+                background: rgba(30, 30, 30, 0.43);
+                box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
                 font-family: 'Courier New', 'Monaco', monospace;
                 color: #fff;
                 letter-spacing: 0;
@@ -224,189 +287,66 @@ export class GameUI {
                     ${scenario.promptText}
                 </div>
             </div>
-            ${balanceHTML}
-            <div id="game-scenario" style="
-                position: absolute;
-                left: 50%;
-                bottom: 64px;
-                transform: translate(-50%, 0);
-                width: min(88%, 940px);
-                background: rgba(14, 14, 14, 0.86);
-                padding: 34px 40px;
-                border-radius: 32px;
-                text-align: left;
-                z-index: 999;
-                color: #fff;
-                font-family: 'Courier New', 'Monaco', monospace;
-                box-shadow: 0 50px 110px rgba(0, 0, 0, 0.6);
-                box-sizing: border-box;
-                opacity: 0;
-                will-change: opacity, transform, left, top;
-                position: absolute;
-                max-height: 42%;
-                min-height: 240px;
-                overflow: hidden;
-            ">
-                <canvas id="heatmap-silhouette" style="
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    z-index: 1;
-                    opacity: 0.75;
-                    pointer-events: none;
-                    mix-blend-mode: screen;
-                "></canvas>
-                <div id="smile-status" style="
-                        display: flex;
-                        flex-direction: column;
-                        gap: 22px;
-                        position: relative;
-                        z-index: 2;
-                        font-family: 'Courier New', 'Monaco', monospace;
-                    ">
-                    <div style="
-                        display: flex;
-                        flex-direction: column;
-                        gap: 18px;
-                        padding: 6px 0;
-                    ">
-                        <div style="
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: flex-end;
-                            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-                            padding-bottom: 12px;
-                        ">
-                            <span style="
-                                font-size: 12px;
-                                letter-spacing: 0.32em;
-                                text-transform: uppercase;
-                                color: rgba(255, 255, 255, 0.48);
-                                font-weight: 500;
-                                white-space: nowrap;
-                            ">Expression Score</span>
-                            <span id="status-score" style="
-                                font-size: 34px;
-                                font-weight: 700;
-                                color: #fff;
-                                letter-spacing: 0.06em;
-                            ">--</span>
-                        </div>
-                        <div style="
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                        ">
-                            <span style="
-                                font-size: 12px;
-                                letter-spacing: 0.3em;
-                                text-transform: uppercase;
-                                color: rgba(255, 255, 255, 0.5);
-                                font-weight: 500;
-                            ">Status Detected</span>
-                            <span id="status-indicator" style="
-                                font-size: 20px;
-                                font-weight: 600;
-                                color: rgba(255, 255, 255, 0.9);
-                                text-align: right;
-                                text-transform: uppercase;
-                                letter-spacing: 0.24em;
-                            ">--</span>
-                        </div>
-                        <div style="
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                        ">
-                            <span style="
-                                font-size: 12px;
-                                letter-spacing: 0.3em;
-                                text-transform: uppercase;
-                                color: rgba(255, 255, 255, 0.5);
-                                font-weight: 500;
-                            ">Charge</span>
-                            <span id="status-charge" style="
-                                font-size: 18px;
-                                font-weight: 600;
-                                color: rgba(255, 255, 255, 0.75);
-                                text-align: right;
-                                letter-spacing: 0.24em;
-                                text-transform: uppercase;
-                            ">--</span>
-                        </div>
-                    </div>
-                </div>
-                
-            </div>
         `;
     }
     
-    // Update real-time status during observation
+    // Update real-time status during observation — expression bar fill and live score
     updateRealTimeStatus(smilingScore, balance, previousBalance, isGenuine = false, thresholds = null) {
-        const statusEl = document.getElementById('status-indicator');
-        const scoreEl = document.getElementById('status-score');
-        const chargeEl = document.getElementById('status-charge');
+        const fillEl = document.getElementById('expression-progress-fill');
+        const valueEl = document.getElementById('expression-score-value');
+        const score = smilingScore === null || smilingScore === undefined ? null : Math.min(100, Math.max(0, Math.round(smilingScore)));
+        if (fillEl) {
+            fillEl.style.width = `${score ?? 0}%`;
+        }
+        if (valueEl) {
+            valueEl.textContent = score === null ? '--' : String(score);
+        }
+    }
+
+    // Animate charge as flying number from bar to Balance, then update Balance
+    animateChargeToBalance(chargeAmount, newBalance) {
+        const barWrap = document.getElementById('expression-progress-wrap');
         const balanceEl = document.getElementById('game-balance');
-        if (!statusEl || !scoreEl || !chargeEl) return;
-        
-        // Use dynamic thresholds if provided, otherwise use defaults
-        const smileDetectedThreshold = thresholds?.smileDetected || 20;
-        const smileScoreThreshold = thresholds?.smileScore || 50;
-        
-        // Update status indicator (immersive dark theme)
-        let statusText = '';
-        let statusColor = 'rgba(255, 255, 255, 0.6)';
-        let charge = '--';
-        
-        if (smilingScore === null || smilingScore === undefined) {
-            statusText = 'No face detected';
-            statusColor = 'rgba(255, 255, 255, 0.6)';
-            charge = '--';
-        } else if (smilingScore < smileDetectedThreshold) {
-            statusText = 'No smile';
-            statusColor = '#FF3B30';
-            charge = `-${Math.abs(this.currentScenario?.noSmilePenalty || 0)}`;
-        } else if (smilingScore < smileScoreThreshold || !isGenuine) {
-            // Smiling but not genuine - show cost/risk
-            statusText = 'Smile detected';
-            statusColor = '#FF9500';
-            charge = `-${Math.abs(this.currentScenario?.smileCost || 0)}`;
-        } else {
-            // Genuine smile - show reward (1.5x the smileCost)
-            statusText = 'Genuine smile';
-            statusColor = '#34C759';
-            const reward = this.currentScenario ? Math.ceil(Math.abs(this.currentScenario.smileCost) * 1.5) : 0;
-            charge = reward > 0 ? `+${reward}` : '0';
+        if (!barWrap || !balanceEl) {
+            const existing = document.getElementById('game-balance');
+            if (existing) existing.outerHTML = this.displayBalance(newBalance);
+            return;
         }
-        
-        if (charge === '-0' || charge === '+0') {
-            charge = '0';
-        }
-        
-        // Update receipt-style status display
-        if (statusEl) {
-            statusEl.textContent = statusText.toUpperCase();
-            statusEl.style.color = statusColor;
-        }
-        
-        if (scoreEl) {
-            const scoreValue = smilingScore === null || smilingScore === undefined ? '--' : `${Math.round(smilingScore)}`;
-            scoreEl.textContent = scoreValue;
-            scoreEl.style.color = '#fff';
-        }
-        
-        if (chargeEl) {
-            chargeEl.textContent = charge;
-            chargeEl.style.color = isGenuine ? '#34C759' : statusColor;
-        }
-        
-        // Update balance (receipt style - no animations)
-        if (balanceEl && balance !== previousBalance) {
-            const newBalanceHTML = this.displayBalance(balance, previousBalance, false);
-            balanceEl.outerHTML = newBalanceHTML;
-        }
+        const barRect = barWrap.getBoundingClientRect();
+        const balanceRect = balanceEl.getBoundingClientRect();
+        const fly = document.createElement('span');
+        const sign = chargeAmount > 0 ? '+' : '';
+        fly.textContent = `${sign}${chargeAmount}`;
+        fly.id = 'charge-fly';
+        fly.style.cssText = `
+            position: fixed;
+            left: ${barRect.left + barRect.width / 2}px;
+            top: ${barRect.top + barRect.height / 2}px;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            font-family: 'Courier New', 'Monaco', monospace;
+            font-size: 18px;
+            font-weight: 600;
+            color: ${chargeAmount >= 0 ? '#34C759' : '#FF3B30'};
+            pointer-events: none;
+            transition: none;
+        `;
+        document.body.appendChild(fly);
+        const endX = balanceRect.left + balanceRect.width / 2;
+        const endY = balanceRect.top + balanceRect.height / 2;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                fly.style.transition = 'left 0.5s ease-out, top 0.5s ease-out, opacity 0.5s ease-out';
+                fly.style.left = `${endX}px`;
+                fly.style.top = `${endY}px`;
+                fly.style.opacity = '0.7';
+            });
+        });
+        setTimeout(() => {
+            if (fly.parentNode) fly.parentNode.removeChild(fly);
+            const newHTML = this.displayBalance(newBalance);
+            if (balanceEl.parentNode) balanceEl.outerHTML = newHTML;
+        }, 520);
     }
     
     // Store current scenario for status updates
@@ -1603,71 +1543,11 @@ export class GameUI {
                 this.scenarioRevealTimeout = null;
             }
             
-            // Preserve heatmap canvas if it exists (clone it to preserve canvas state)
-            const existingHeatmap = document.getElementById('heatmap-silhouette');
-            let heatmapClone = null;
-            if (existingHeatmap) {
-                heatmapClone = existingHeatmap.cloneNode(true);
-                // Copy canvas content if possible
-                const existingCtx = existingHeatmap.getContext('2d');
-                const cloneCtx = heatmapClone.getContext('2d');
-                if (existingCtx && cloneCtx && existingHeatmap.width > 0 && existingHeatmap.height > 0) {
-                    cloneCtx.drawImage(existingHeatmap, 0, 0);
-                }
-            }
-            
             // Render immediately
             this.container.innerHTML = html;
             
             // Ensure global observation bar exists after render
             this.ensureObservationBar();
-            
-            // Re-insert heatmap canvas inside scenario panel if it exists
-            const scenarioPanel = document.getElementById('game-scenario');
-            if (heatmapClone && scenarioPanel) {
-                // Insert at the beginning of scenario panel (before text content)
-                const firstChild = scenarioPanel.firstChild;
-                if (firstChild) {
-                    scenarioPanel.insertBefore(heatmapClone, firstChild);
-                } else {
-                    scenarioPanel.appendChild(heatmapClone);
-                }
-                this.heatmapCanvas = heatmapClone;
-                this.heatmapCtx = heatmapClone.getContext('2d');
-            } else if (!document.getElementById('heatmap-silhouette') && scenarioPanel) {
-                // Create new canvas inside scenario panel if it doesn't exist
-                const newCanvas = document.createElement('canvas');
-                newCanvas.id = 'heatmap-silhouette';
-                newCanvas.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    z-index: 1;
-                    opacity: 0.75;
-                    pointer-events: none;
-                    mix-blend-mode: screen;
-                `;
-                const firstChild = scenarioPanel.firstChild;
-                if (firstChild) {
-                    scenarioPanel.insertBefore(newCanvas, firstChild);
-                } else {
-                    scenarioPanel.appendChild(newCanvas);
-                }
-                this.heatmapCanvas = newCanvas;
-                this.heatmapCtx = newCanvas.getContext('2d');
-            } else if (heatmapClone) {
-                // Fallback: insert at beginning of container if no scenario panel
-                const firstChild = this.container.firstChild;
-                if (firstChild) {
-                    this.container.insertBefore(heatmapClone, firstChild);
-                } else {
-                    this.container.appendChild(heatmapClone);
-                }
-                this.heatmapCanvas = heatmapClone;
-                this.heatmapCtx = heatmapClone.getContext('2d');
-            }
             
             // Force layout recalculation with multiple passes
             void this.container.offsetHeight;
@@ -1679,9 +1559,9 @@ export class GameUI {
                 void this.container.offsetHeight;
                 
                 // Now calculate exact positions and show
-                const scenario = document.getElementById('game-scenario');
                 const scenarioHeader = document.getElementById('scenario-header');
                 const balance = document.getElementById('game-balance');
+                const expressionBar = document.getElementById('expression-progress-wrap');
                 const containerWidth = this.container.offsetWidth;
                 const containerHeight = this.container.offsetHeight;
                 
@@ -1701,24 +1581,21 @@ export class GameUI {
                     scenarioHeader.style.transition = 'opacity 0.4s ease-out, transform 0.6s ease, width 0.6s ease, top 0.6s ease';
                 }
                 
-        if (scenario && this.container) {
-                    const scenarioWidth = Math.min(containerWidth * 0.88, 940);
-                    scenario.style.width = `${scenarioWidth}px`;
-                    scenario.style.left = '50%';
-                    scenario.style.bottom = '64px';
-                    scenario.style.transform = 'translate(-50%, 0)';
-                    scenario.style.transition = 'opacity 0.4s ease-out, width 0.6s ease, padding 0.6s ease, transform 0.6s ease';
-                    scenario.style.opacity = '0';
+                if (expressionBar) {
+                    expressionBar.style.opacity = '0';
                 }
                 
                 // Show container
                 this.container.style.visibility = 'visible';
                 
-                // Reveal balance + scenario after 3 seconds, keeping scenario prompt visible now
+                // Reveal balance + expression bar + prompt card after 6 seconds (prompt-only time)
                 this.scenarioRevealTimeout = setTimeout(() => {
-                    const currentScenario = document.getElementById('game-scenario');
                     const currentBalance = document.getElementById('game-balance');
                     const currentHeader = document.getElementById('scenario-header');
+                    const currentBar = document.getElementById('expression-progress-wrap');
+                    const containerWidth = this.container ? this.container.offsetWidth : window.innerWidth;
+                    const containerHeight = this.container ? this.container.offsetHeight : window.innerHeight;
+                    const targetWidth = Math.min(containerWidth * 0.74, 820);
                     
                     if (currentBalance) {
                         currentBalance.style.top = '28px';
@@ -1726,27 +1603,28 @@ export class GameUI {
                         currentBalance.style.transform = 'scale(0.94)';
                         currentBalance.style.opacity = '1';
                     }
-                    if (currentScenario) {
-                        const containerWidth = this.container ? this.container.offsetWidth : window.innerWidth;
-                        const containerHeight = this.container ? this.container.offsetHeight : window.innerHeight;
-                        const scenarioWidth = Math.min(containerWidth * 0.74, 820);
-                        currentScenario.style.width = `${scenarioWidth}px`;
-                        currentScenario.style.padding = '28px 36px';
-                        currentScenario.style.bottom = `${Math.max(72, containerHeight * 0.12)}px`;
-                        currentScenario.style.transform = 'translate(-50%, 0)';
-                        currentScenario.style.borderRadius = '28px';
-                        currentScenario.style.opacity = '1';
+                    if (currentBar) {
+                        currentBar.style.width = `${targetWidth}px`;
+                        currentBar.style.transition = 'opacity 0.35s ease-out';
+                        currentBar.style.opacity = '1';
                     }
                     if (currentHeader) {
-                        const containerWidth = this.container ? this.container.offsetWidth : window.innerWidth;
-                        const containerHeight = this.container ? this.container.offsetHeight : window.innerHeight;
-                        const targetWidth = Math.min(containerWidth * 0.74, 820);
-                        const targetTop = Math.max(90, containerHeight * 0.18);
-                        currentHeader.style.width = `${targetWidth}px`;
+                        let targetTop;
+                        if (currentBar && this.container) {
+                            const barRect = currentBar.getBoundingClientRect();
+                            const containerRect = this.container.getBoundingClientRect();
+                            const gap = 48;
+                            targetTop = (barRect.bottom - containerRect.top) + gap;
+                        } else {
+                            targetTop = Math.max(280, containerHeight * 0.58);
+                        }
+                        const promptWidth = Math.min(containerWidth * 0.78, 860);
+                        currentHeader.style.width = `${promptWidth}px`;
                         currentHeader.style.top = `${targetTop}px`;
-                        currentHeader.style.transform = 'translate(-50%, 0) scale(0.94)';
+                        currentHeader.style.transform = 'translate(-50%, 0) scale(0.98)';
                         currentHeader.style.borderRadius = '26px';
-                        currentHeader.style.padding = '42px';
+                        currentHeader.style.padding = '56px 52px 72px';
+                        currentHeader.style.minHeight = '180px';
                         
                         const promptLabelEl = currentHeader.querySelector('[data-role="scenario-label"]');
                         const promptTextEl = currentHeader.querySelector('[data-role="scenario-prompt"]');
@@ -1783,7 +1661,7 @@ export class GameUI {
                         }, 840);
                     }
                     this.scenarioRevealTimeout = null;
-                }, 3000);
+                }, 6000);
             });
         }
     }

@@ -95,8 +95,8 @@ export class GameLoop {
             // Wait for elements to be positioned before showing them
             await this.delay(50);
             
-            // Allow scenario prompt to display alone for 5 seconds before starting measurement status
-            await this.delay(5000);
+            // Allow scenario prompt to display alone for 6 seconds before starting measurement status
+            await this.delay(6000);
             
             // Start passive observation
             const observationData = this.scenarioController.startPassiveObservation(
@@ -181,15 +181,6 @@ export class GameLoop {
             });
             
             // No transition screen - go directly to next scenario
-            // Clear heatmap canvas before moving to next scenario
-            const heatmapCanvas = document.getElementById('heatmap-silhouette');
-            if (heatmapCanvas) {
-                const ctx = heatmapCanvas.getContext('2d');
-                if (ctx) {
-                    ctx.clearRect(0, 0, heatmapCanvas.width, heatmapCanvas.height);
-                }
-            }
-            
             // Check if game over (balance negative or 5 rounds reached)
             if (this.gameState.isGameOver()) {
                 this.endGame();
@@ -278,19 +269,6 @@ export class GameLoop {
                             lastUpdateTime = now;
                         }
                         
-                        // Update heatmap silhouette continuously (every frame) for smooth animation
-                        if (this.mirror.realLandmarks && this.mirror.realLandmarks.length > 0 && this.mirror.faceBoundingBox) {
-                            try {
-                                this.gameUI.updateHeatmapSilhouette(
-                                    this.mirror.realLandmarks,
-                                    this.mirror.faceBoundingBox,
-                                    currentMetrics.smilingScore,
-                                    this.mirror
-                                );
-                            } catch (error) {
-                                console.error('Error updating heatmap:', error);
-                            }
-                        }
                     }
                 }
                 
@@ -315,48 +293,24 @@ export class GameLoop {
         // Get dynamic thresholds based on genuine smile count
         const thresholds = this.gameState.getGenuineSmileThresholds();
         
-        // Determine final state and apply points
+        let chargeAmount = 0;
         if (finalSmilingScore < thresholds.smileDetected) {
-            // No smile - apply penalty
+            chargeAmount = -Math.abs(this.currentScenario.noSmilePenalty);
             this.gameState.deductPoints(Math.abs(this.currentScenario.noSmilePenalty));
-            
-            // Update UI with penalty
-            this.gameUI.updateRealTimeStatus(
-                finalSmilingScore,
-                this.gameState.getBalance(),
-                balanceBefore,
-                false,
-                thresholds
-            );
         } else if (finalSmilingScore >= thresholds.smileScore && 
                    finalMetrics.facialSymmetry >= thresholds.symmetry && 
                    finalMetrics.joyDetection >= thresholds.joy) {
-            // Genuine smile - EARN points (reward is 1.5x the smileCost to ensure net gain)
             const reward = Math.ceil(Math.abs(this.currentScenario.smileCost) * 1.5);
+            chargeAmount = reward;
             this.gameState.addPoints(reward);
-            this.gameState.recordGenuineSmile(); // Track genuine smile for threshold increases
-            
-            // Show reward
-            this.gameUI.updateRealTimeStatus(
-                finalSmilingScore,
-                this.gameState.getBalance(),
-                balanceBefore,
-                true, // Show as genuine to display reward
-                thresholds
-            );
+            this.gameState.recordGenuineSmile();
         } else {
-            // Insufficient/fake smile - deduct cost
+            chargeAmount = -Math.abs(this.currentScenario.smileCost);
             this.gameState.deductPoints(Math.abs(this.currentScenario.smileCost));
-            
-            // Update UI with cost deduction
-            this.gameUI.updateRealTimeStatus(
-                finalSmilingScore,
-                this.gameState.getBalance(),
-                balanceBefore,
-                false,
-                thresholds
-            );
         }
+        const newBalance = this.gameState.getBalance();
+        this.gameUI.animateChargeToBalance(chargeAmount, newBalance);
+        await this.delay(600);
     }
     
     async handleSkip() {
@@ -382,10 +336,10 @@ export class GameLoop {
             )
         );
         
-        // Auto-restart after 5 seconds - return to beginning (measurement stage)
+        // Auto-restart after 10 seconds - return to beginning (measurement stage)
         setTimeout(() => {
             this.restartFromBeginning();
-        }, 5000);
+        }, 10000);
     }
     
     restartFromBeginning() {
