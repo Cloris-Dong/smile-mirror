@@ -21,7 +21,7 @@ export class GameUI {
     }
     
     // Display point balance with animation
-    displayBalance(balance, previousBalance = null, animate = false) {
+    displayBalance(balance, previousBalance = null, animate = false, alreadyVisible = false) {
         const color = this.getBalanceColor(balance);
         const isNegative = balance < 0;
         let animationClass = '';
@@ -35,14 +35,17 @@ export class GameUI {
         
         // Calculate balance percentage for visual meter (assuming max 100)
         const balancePercent = Math.min(100, Math.max(0, (balance / 100) * 100));
+        const opacityStyle = alreadyVisible ? '1' : '0';
+        const topStyle = alreadyVisible ? '28px' : '36px';
+        const rightStyle = alreadyVisible ? '40px' : '48px';
         
         return `
             <div id="game-balance" class="${animationClass}" style="
                 position: absolute;
-                top: 36px;
-                right: 48px;
+                top: ${topStyle};
+                right: ${rightStyle};
                 z-index: 1200;
-                opacity: 0;
+                opacity: ${opacityStyle};
                 will-change: opacity, transform;
                 padding: 14px 28px;
                 border-radius: 999px;
@@ -217,8 +220,8 @@ export class GameUI {
                         border-radius: 999px;
                         transition: width 0.2s ease-out;
                     "></div>
-                    <div style="position: absolute; left: 20%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.45); pointer-events: none;"></div>
-                    <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.45); pointer-events: none;"></div>
+                    <div id="expression-cutoff-1" style="position: absolute; left: 20%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.45); pointer-events: none; transition: left 0.2s ease-out;"></div>
+                    <div id="expression-cutoff-2" style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.45); pointer-events: none; transition: left 0.2s ease-out;"></div>
                 </div>
                 <div style="
                     display: flex;
@@ -290,10 +293,12 @@ export class GameUI {
         `;
     }
     
-    // Update real-time status during observation — expression bar fill and live score
+    // Update real-time status during observation — expression bar fill, live score, and cutoff positions from thresholds
     updateRealTimeStatus(smilingScore, balance, previousBalance, isGenuine = false, thresholds = null) {
         const fillEl = document.getElementById('expression-progress-fill');
         const valueEl = document.getElementById('expression-score-value');
+        const cutoff1 = document.getElementById('expression-cutoff-1');
+        const cutoff2 = document.getElementById('expression-cutoff-2');
         const score = smilingScore === null || smilingScore === undefined ? null : Math.min(100, Math.max(0, Math.round(smilingScore)));
         if (fillEl) {
             fillEl.style.width = `${score ?? 0}%`;
@@ -301,12 +306,17 @@ export class GameUI {
         if (valueEl) {
             valueEl.textContent = score === null ? '--' : String(score);
         }
+        const smileDetected = thresholds?.smileDetected ?? 20;
+        const smileScore = thresholds?.smileScore ?? 50;
+        if (cutoff1) cutoff1.style.left = `${smileDetected}%`;
+        if (cutoff2) cutoff2.style.left = `${smileScore}%`;
     }
 
-    // Animate charge as flying number from bar to Balance, then update Balance
+    // Animate charge as flying number from bar area up to Balance, then tick Balance to new value
     animateChargeToBalance(chargeAmount, newBalance) {
         const barWrap = document.getElementById('expression-progress-wrap');
         const balanceEl = document.getElementById('game-balance');
+        const previousBalance = newBalance - chargeAmount;
         if (!barWrap || !balanceEl) {
             const existing = document.getElementById('game-balance');
             if (existing) existing.outerHTML = this.displayBalance(newBalance);
@@ -314,39 +324,50 @@ export class GameUI {
         }
         const barRect = barWrap.getBoundingClientRect();
         const balanceRect = balanceEl.getBoundingClientRect();
+        const startX = barRect.left + barRect.width / 2;
+        const startY = barRect.top + barRect.height / 2;
+        const endX = balanceRect.left + balanceRect.width / 2;
+        const endY = balanceRect.top + balanceRect.height / 2;
         const fly = document.createElement('span');
         const sign = chargeAmount > 0 ? '+' : '';
         fly.textContent = `${sign}${chargeAmount}`;
         fly.id = 'charge-fly';
         fly.style.cssText = `
             position: fixed;
-            left: ${barRect.left + barRect.width / 2}px;
-            top: ${barRect.top + barRect.height / 2}px;
+            left: ${startX}px;
+            top: ${startY}px;
             transform: translate(-50%, -50%);
-            z-index: 9999;
+            z-index: 99999;
             font-family: 'Courier New', 'Monaco', monospace;
-            font-size: 18px;
-            font-weight: 600;
+            font-size: 24px;
+            font-weight: 700;
             color: ${chargeAmount >= 0 ? '#34C759' : '#FF3B30'};
+            text-shadow: 0 0 12px rgba(0,0,0,0.8), 0 2px 4px rgba(0,0,0,0.9);
             pointer-events: none;
             transition: none;
+            opacity: 1;
         `;
         document.body.appendChild(fly);
-        const endX = balanceRect.left + balanceRect.width / 2;
-        const endY = balanceRect.top + balanceRect.height / 2;
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                fly.style.transition = 'left 0.5s ease-out, top 0.5s ease-out, opacity 0.5s ease-out';
+                fly.style.transition = 'left 1.1s ease-out, top 1.1s ease-out, opacity 1.1s ease-out';
                 fly.style.left = `${endX}px`;
                 fly.style.top = `${endY}px`;
-                fly.style.opacity = '0.7';
+                fly.style.opacity = '0.65';
             });
         });
+        const animationEndMs = 1150;
         setTimeout(() => {
             if (fly.parentNode) fly.parentNode.removeChild(fly);
-            const newHTML = this.displayBalance(newBalance);
-            if (balanceEl.parentNode) balanceEl.outerHTML = newHTML;
-        }, 520);
+            const newHTML = this.displayBalance(newBalance, previousBalance, true, true);
+            if (balanceEl.parentNode) {
+                balanceEl.outerHTML = newHTML;
+                const updated = document.getElementById('game-balance');
+                if (updated) {
+                    updated.style.opacity = '1';
+                }
+            }
+        }, animationEndMs);
     }
     
     // Store current scenario for status updates

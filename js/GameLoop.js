@@ -310,7 +310,7 @@ export class GameLoop {
         }
         const newBalance = this.gameState.getBalance();
         this.gameUI.animateChargeToBalance(chargeAmount, newBalance);
-        await this.delay(600);
+        await this.delay(2400);
     }
     
     async handleSkip() {
