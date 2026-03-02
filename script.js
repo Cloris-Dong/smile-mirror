@@ -2369,7 +2369,7 @@ class DigitalMirror {
                     this.drawMeasurementLabels(ctx);
                 }
                 
-                this.updateAIMessage(`That's not your real one. ${scoreData.score}%.\nLet's give it another try.`);
+                this.updateAIMessage(`That's not your real one. ${scoreData.score}%. Let's give it another try.`);
                 setTimeout(() => {
                     this.updateAIMessage(`Say "I am human."`);
                 }, 2500);
