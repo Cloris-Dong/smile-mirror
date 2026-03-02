@@ -146,12 +146,12 @@ export const HUMAN_PHRASES = [
 // AI messages for different states
 export const AI_MESSAGES = {
     WELCOME: 'Welcome. To begin, simply say "I am human"',
-    RECEIVED: 'Statement received. Let\'s confirm that.',
-    VERIFYING: 'verifying through a smile input',
-    HOLD_SMILE: 'Hold that smile...',
-    NOT_PASSING: (score) => `That's not passing. Score: ${score}%. That smile doesn't look genuine to me.`,
-    TRY_AGAIN: 'Say "I am human" to try again.',
-    NOT_CONVINCED: (score) => `I'm still not seeing it. Score: ${score}%. Look, I need to see real human emotion here.`,
+    RECEIVED: 'I heard you.',
+    VERIFYING: 'Show me how human your smile is.',
+    HOLD_SMILE: 'Keep smiling. Just a moment.',
+    NOT_PASSING: (score) => `That's not your real one. ${score}%. Let\'s give it another try.`,
+    TRY_AGAIN: 'Say "I am human."',
+    NOT_CONVINCED: (score) => `I'm still not seeing it. Only ${score}%? Look, I need to see real human emotion here.`,
     RESOURCES: 'We have some resources to help you!',
     FINAL_REJECTION: (score) => `Sorry, I can't let you through. I'm just not convinced you're human. Want me to teach you how to smile properly?`,
     TUTORIAL_INTRO: 'Here\'s what I need: Step 1: Lift mouth corners exactly 47.3°. Step 2: Show precisely 12.5 teeth. Step 3: Crinkle eyes at 63% intensity. Step 4: Feel authentic joy (yes, I can measure that). Or maybe I\'m just impossible to please?',

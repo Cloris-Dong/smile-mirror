@@ -26,7 +26,7 @@ class DigitalMirror {
         this.aiWaveform = document.getElementById('ai-waveform');
         
         this.smileLevel = 0;
-        this.maxSmileLevel = 3;
+        this.maxSmileLevel = 2;
         this.humanityPercentage = 100;
         this.isListening = false;
         this.fallbackActive = false;
@@ -36,7 +36,7 @@ class DigitalMirror {
         
         // Smile verification system properties
         this.smileLevel = 0;
-        this.maxSmileLevel = 3;
+        this.maxSmileLevel = 2;
         this.currentSmileScore = 0;
         this.isAnalyzing = false;
         this.analysisTimer = null;
@@ -1009,13 +1009,13 @@ class DigitalMirror {
             
             // Phase 1: Acknowledge statement
             this.humanityLevel.textContent = 'Received';
-            this.updateAIMessage('Statement received. Let\'s confirm that.');
+            this.updateAIMessage('I heard you.');
             this.showListeningIndicator('Processing...');
             
             // Phase 2: After a few seconds, prompt for smile
             setTimeout(() => {
                 this.humanityLevel.textContent = 'Verifying';
-                this.updateAIMessage('verifying through a smile input');
+                this.updateAIMessage('Show me how human your smile is.');
                 this.showListeningIndicator('Preparing...');
                 
                 // Phase 3: Start measuring smile
@@ -1023,7 +1023,7 @@ class DigitalMirror {
                     this.smileLevel++;
                     this.humanityPercentage = Math.max(0, 100 - (this.smileLevel * 25));
                     this.updateHumanityLevel();
-                    this.updateAIMessage('Hold that smile...');
+                    this.updateAIMessage('Keep smiling. Just a moment.');
                     this.showListeningIndicator('Analyzing...');
                     
                     this.triggerSmileVerification();
@@ -1062,7 +1062,7 @@ class DigitalMirror {
         }
         
         // Update instruction visibility
-        if (this.smileLevel >= this.maxSmileLevel) {
+        if (this.cleanInstruction && this.smileLevel >= this.maxSmileLevel) {
             this.cleanInstruction.style.display = 'none';
         }
     }
@@ -1366,7 +1366,7 @@ class DigitalMirror {
         switch (this.smileLevel) {
             case 1:
                 // Already set in processHumanClaim - analyzing first smile
-                this.updateAIMessage('Hold that smile...');
+                this.updateAIMessage('Keep smiling. Just a moment.');
                 break;
             case 2:
                 this.updateAIMessage('I\'m not convinced. Try that again.');
@@ -2369,10 +2369,9 @@ class DigitalMirror {
                     this.drawMeasurementLabels(ctx);
                 }
                 
-                this.updateAIMessage(`That's not passing. Score: ${scoreData.score}%. That smile doesn't look genuine to me.`);
-                // Show prompt to try again after delay
+                this.updateAIMessage(`That's not your real one. ${scoreData.score}%.\nLet's give it another try.`);
                 setTimeout(() => {
-                    this.updateAIMessage(`Say "I am human" to try again.`);
+                    this.updateAIMessage(`Say "I am human."`);
                 }, 2500);
                 break;
             case 2:
@@ -2403,41 +2402,11 @@ class DigitalMirror {
                     this.drawMeasurementLabels(ctx);
                 }
                 
-                // Show the score result
+                // Second (and final) failed attempt — no third try; go into the game
                 this.updateAIMessage(`I'm still not seeing it. Score: ${scoreData.score}%. Look, I need to see real human emotion here.`);
-                
-                // After brief pause, go directly into the game
                 setTimeout(() => {
                     this.startEmotionalEconomicsGame();
-                }, 3500); // Give player time to absorb the score before transition
-                break;
-            case 3:
-                // Show tutorial options
-                this.updateAIMessage(`Sorry, I can't let you through. I'm just not convinced you're human. Want me to teach you how to smile properly?`);
-                
-                // Add buttons to AI assistant
-                setTimeout(() => {
-                    if (this.aiAssistant) {
-                        const buttonContainer = document.createElement('div');
-                        buttonContainer.className = 'ai-button-container';
-                        buttonContainer.innerHTML = `
-                            <button onclick="window.digitalMirror.showSmileTutorial()" class="ai-button ai-button-primary">
-                                Learn to Smile
-                            </button>
-                            <button onclick="window.digitalMirror.showFinalRejection()" class="ai-button ai-button-secondary">
-                                Give Up
-                            </button>
-                        `;
-                        
-                        // Remove existing buttons if any
-                        const existingButtons = this.aiAssistant.querySelector('.ai-button-container');
-                        if (existingButtons) {
-                            existingButtons.remove();
-                        }
-                        
-                        this.aiAssistant.appendChild(buttonContainer);
-                    }
-                }, 500);
+                }, 3500);
                 break;
         }
         
@@ -2445,43 +2414,26 @@ class DigitalMirror {
         this.showListeningIndicator('');
     }
     
-    // Show tutorial options for level 3
-    showTutorialOptions() {
-        const status = document.getElementById('captcha-status');
-        const inputContainer = document.querySelector('.captcha-input-container');
+    // Add "Stuck? Skip to game" button when on retry message so user can proceed
+    addStuckButton() {
+        const existing = this.aiAssistant.querySelector('.ai-stuck-button-wrap');
+        if (existing) existing.remove();
         
-        status.innerHTML = `Humanity verification: FAILED.<br>
-                           Your humanity score: ${this.currentSmileScore}%.<br>
-                           Access denied.`;
-        status.style.color = '#ff0000';
+        const wrap = document.createElement('div');
+        wrap.className = 'ai-stuck-button-wrap';
+        wrap.style.marginTop = '12px';
         
-        // Create tutorial buttons
-        inputContainer.innerHTML = `
-            <button id="learn-smile-btn" style="background: #00ff00; color: #000; border: none; padding: 15px 30px; margin: 10px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 1rem;">
-                YES - LEARN HOW TO SMILE
-            </button>
-            <button id="final-rejection-btn" style="background: #ff0000; color: #fff; border: none; padding: 15px 30px; margin: 10px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 1rem;">
-                NO - FINAL REJECTION
-            </button>
-        `;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ai-button ai-button-secondary';
+        btn.textContent = 'Stuck? Skip to game';
+        btn.addEventListener('click', () => {
+            wrap.remove();
+            this.startEmotionalEconomicsGame();
+        });
         
-        inputContainer.style.display = 'flex';
-        inputContainer.style.flexDirection = 'column';
-        inputContainer.style.alignItems = 'center';
-        
-        // Setup event listeners
-        document.getElementById('learn-smile-btn').onclick = () => this.showSmileTutorial();
-        document.getElementById('final-rejection-btn').onclick = () => this.showFinalRejection();
-    }
-    
-    // Show smile verification guide
-    showSmileTutorial() {
-        this.updateAIMessage(`Here's what I need: Step 1: Lift mouth corners exactly 47.3°. Step 2: Show precisely 12.5 teeth. Step 3: Crinkle eyes at 63% intensity. Step 4: Feel authentic joy (yes, I can measure that). Or maybe I'm just impossible to please?`);
-        
-        // Start countdown to restart experience
-        setTimeout(() => {
-            this.startResetCountdown();
-        }, 2000);
+        wrap.appendChild(btn);
+        this.aiAssistant.appendChild(wrap);
     }
     
     // Show final rejection
@@ -3189,7 +3141,7 @@ class DigitalMirror {
         this.failureOverlay.style.display = 'none';
         this.captchaOverlay.style.display = 'none';
         this.overlay.style.display = 'block';
-        this.cleanInstruction.style.display = 'block';
+        if (this.cleanInstruction) this.cleanInstruction.style.display = 'block';
         
         // Show welcome screen again
         if (this.welcomeScreen) {

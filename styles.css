@@ -587,6 +587,7 @@ body {
     letter-spacing: -0.01em;
     line-height: 1.47;
     margin: 0;
+    white-space: pre-line;
 }
 
 .ai-button-container {
