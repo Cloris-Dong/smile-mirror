@@ -16,6 +16,7 @@ export class GameLoop {
         this.gameUI = new GameUI(container);
         
         this.isRunning = false;
+        this.storyComplete = false;
         this.observationInterval = null;
         this.currentScenario = null;
     }
@@ -24,8 +25,14 @@ export class GameLoop {
         if (this.isRunning) return;
         
         this.isRunning = true;
+        this.storyComplete = false;
         this.gameState.reset();
         this.measurementAnalyzer.resetBaseline();
+
+        // End the game once all story chunks have been revealed
+        document.addEventListener('mirror-story-complete', () => {
+            this.storyComplete = true;
+        }, { once: true });
         
         // Add CSS styles
         this.gameUI.addStyles();
@@ -35,7 +42,7 @@ export class GameLoop {
         const introTarget = document.getElementById('intro-typed-text');
         if (introTarget) {
             const introScript = [
-                { text: 'I see that you are having some troubles here.', pause: 500 },
+                { text: 'I see you are having some troubles here.', pause: 500 },
                 { text: 'How about let\'s try some scenarios?', pause: 0 }
             ];
             this.gameUI.runTypingSequence(introTarget, introScript);
@@ -56,7 +63,7 @@ export class GameLoop {
     async runGameLoop() {
         // Game ends when balance goes negative (no round cap)
         // Point values designed for ~4 rounds to game over
-        while (this.isRunning && !this.gameState.isGameOver()) {
+        while (this.isRunning && !this.gameState.isGameOver() && !this.storyComplete) {
             // Select scenario
             this.currentScenario = this.scenarioController.selectScenario(this.gameState);
             
@@ -95,8 +102,8 @@ export class GameLoop {
             // Wait for elements to be positioned before showing them
             await this.delay(50);
             
-            // Allow scenario prompt to display alone for 6 seconds before starting measurement status
-            await this.delay(6000);
+            // Allow scenario prompt to display alone for 4 seconds before starting measurement status
+            await this.delay(4000);
             
             // Start passive observation
             const observationData = this.scenarioController.startPassiveObservation(
@@ -180,9 +187,8 @@ export class GameLoop {
                 category: this.currentScenario.category
             });
             
-            // No transition screen - go directly to next scenario
-            // Check if game over (balance negative or 5 rounds reached)
-            if (this.gameState.isGameOver()) {
+            // End if balance gone or story fully told
+            if (this.gameState.isGameOver() || this.storyComplete) {
                 this.endGame();
                 return;
             }
@@ -300,7 +306,7 @@ export class GameLoop {
         } else if (finalSmilingScore >= thresholds.smileScore && 
                    finalMetrics.facialSymmetry >= thresholds.symmetry && 
                    finalMetrics.joyDetection >= thresholds.joy) {
-            const reward = Math.ceil(Math.abs(this.currentScenario.smileCost) * 1.5);
+            const reward = Math.ceil(Math.abs(this.currentScenario.smileCost) * 2.0);
             chargeAmount = reward;
             this.gameState.addPoints(reward);
             this.gameState.recordGenuineSmile();
@@ -310,7 +316,27 @@ export class GameLoop {
         }
         const newBalance = this.gameState.getBalance();
         this.gameUI.animateChargeToBalance(chargeAmount, newBalance);
-        await this.delay(2400);
+        // Wait for charge animation, then fade out scenario card
+        await this.delay(1200);
+        this.gameUI.fadeOutScenarioCard();
+        // Wait for card to fully fade (0.7s + buffer)
+        await this.delay(900);
+        // Signal story text to appear (card is now gone)
+        document.dispatchEvent(new CustomEvent('mirror-story-show'));
+        // Wait until MirrorStory signals that all phrases in this chunk have faded.
+        // Duration is proportional to phrase count — short chunks (e.g. "I see you") resolve quickly.
+        await new Promise((resolve) => {
+            const MAX_WAIT = 18000; // safety cap
+            const timeout = setTimeout(resolve, MAX_WAIT);
+            document.addEventListener('mirror-story-chunk-done', function handler() {
+                document.removeEventListener('mirror-story-chunk-done', handler);
+                clearTimeout(timeout);
+                resolve();
+            });
+        });
+        // Signal story text to fade out (cleans up container) and wait for DOM removal
+        document.dispatchEvent(new CustomEvent('mirror-story-fadeout'));
+        await this.delay(2000);
     }
     
     async handleSkip() {

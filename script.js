@@ -1369,7 +1369,7 @@ class DigitalMirror {
                 this.updateAIMessage('Keep smiling. Just a moment.');
                 break;
             case 2:
-                this.updateAIMessage('I\'m not convinced. Try that again.');
+                this.updateAIMessage('I\'m still not convinced. Try that again.');
                 break;
             case 3:
                 this.updateAIMessage('Still not buying it. One more time.');
@@ -2369,7 +2369,7 @@ class DigitalMirror {
                     this.drawMeasurementLabels(ctx);
                 }
                 
-                this.updateAIMessage(`That's not your real one. ${scoreData.score}%. Let's give it another try.`);
+                this.updateAIMessage(`That's not your real smile. ${scoreData.score}%. Let's give it another try.`);
                 setTimeout(() => {
                     this.updateAIMessage(`Say "I am human."`);
                 }, 2500);
@@ -2403,7 +2403,7 @@ class DigitalMirror {
                 }
                 
                 // Second (and final) failed attempt — no third try; go into the game
-                this.updateAIMessage(`I'm still not seeing it. Score: ${scoreData.score}%. Look, I need to see real human emotion here.`);
+                this.updateAIMessage(`I'm not seeing it. Look, I need to see real human emotion here.`);
                 setTimeout(() => {
                     this.startEmotionalEconomicsGame();
                 }, 3500);

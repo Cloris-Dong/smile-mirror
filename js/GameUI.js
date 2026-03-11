@@ -370,6 +370,15 @@ export class GameUI {
         }, animationEndMs);
     }
     
+    // Fade out the scenario prompt card (called after score is determined)
+    fadeOutScenarioCard() {
+        const header = document.getElementById('scenario-header');
+        if (header) {
+            header.style.transition = 'opacity 0.7s ease-out';
+            header.style.opacity = '0';
+        }
+    }
+
     // Store current scenario for status updates
     setCurrentScenario(scenario) {
         this.currentScenario = scenario;
@@ -1682,7 +1691,7 @@ export class GameUI {
                         }, 840);
                     }
                     this.scenarioRevealTimeout = null;
-                }, 6000);
+                }, 4000);
             });
         }
     }

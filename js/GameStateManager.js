@@ -22,7 +22,7 @@ export class GameStateManager {
         // Next rounds (scenariosCompleted 2+): pressure phase
         // Last round (balance <= 20): debt_spiral phase
         if (this.pointBalance <= 0) return 'game_over';
-        if (this.pointBalance <= 20) return 'debt_spiral'; // Last round territory
+        if (this.pointBalance <= 30) return 'debt_spiral'; // Last round territory
         if (this.scenariosCompleted < 2) return 'trust'; // First 2 rounds
         return 'pressure'; // All other rounds
     }
@@ -48,17 +48,17 @@ export class GameStateManager {
     
     getGenuineSmileThresholds() {
         // Base thresholds
-        let smileScoreThreshold = 50;
-        let symmetryThreshold = 40;
-        let joyThreshold = 45;
-        let smileDetectedThreshold = 20; // Minimum score to be considered "smile detected"
+        let smileScoreThreshold = 45;
+        let symmetryThreshold = 35;
+        let joyThreshold = 40;
+        let smileDetectedThreshold = 25; // Minimum score to be considered "smile detected"
         
-        // Increase thresholds after first genuine smile
+        // Raise thresholds after first genuine smile
         if (this.genuineSmilesCount >= 1) {
-            smileScoreThreshold = 60; // Increased from 50
-            symmetryThreshold = 50; // Increased from 40
-            joyThreshold = 55; // Increased from 45
-            smileDetectedThreshold = 30; // Increased from 20
+            smileScoreThreshold = 55;
+            symmetryThreshold = 45;
+            joyThreshold = 48;
+            smileDetectedThreshold = 30;
         }
         
         return {

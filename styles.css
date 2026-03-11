@@ -81,8 +81,6 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    padding: 14%;
-    box-sizing: border-box;
     pointer-events: none;
     overflow: hidden;
 }
@@ -103,16 +101,18 @@ body {
 .mirror-story-fragment {
     position: absolute;
     transform: translate(-50%, -50%);
-    max-width: 30%;
+    max-width: 28%;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', serif;
-    font-size: clamp(0.75rem, 2.2vw, 0.95rem);
+    font-size: 1.1rem; /* overridden per-span by JS for randomization */
     font-weight: 450;
+    font-style: italic;
     letter-spacing: 0.01em;
-    line-height: 1.45;
-    color: rgba(255, 255, 255, 0.92);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    line-height: 1.5;
+    color: #9ec8e3;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     opacity: 0;
     animation: mirror-story-fragment-in 1.4s ease forwards;
+    word-break: break-word;
 }
 
 @keyframes mirror-story-fragment-in {
@@ -121,7 +121,7 @@ body {
         transform: translate(-50%, -50%) scale(0.96);
     }
     to {
-        opacity: 1;
+        opacity: 0.7;
         transform: translate(-50%, -50%) scale(1);
     }
 }
