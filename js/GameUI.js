@@ -168,7 +168,7 @@ export class GameUI {
     
     // Display scenario screen with balance, expression bar (3 zones), and prompt card
     displayScenario(scenario, balance, skipCallback) {
-        const balanceHTML = this.displayBalance(balance);
+        const balanceHTML = ''; // Balance hidden in single-scenario mode
         // Expression bar: three zones — no smile (0–20), smile detected (20–50), genuine smile (50–100). Width set to match prompt card in reveal timeout.
         const barHTML = `
             <div id="expression-progress-wrap" style="
@@ -370,6 +370,15 @@ export class GameUI {
         }, animationEndMs);
     }
     
+    // Reveal the expression bar — called when the last 5-second measurement window begins
+    revealExpressionBar() {
+        const bar = document.getElementById('expression-progress-wrap');
+        if (bar) {
+            bar.style.transition = 'opacity 0.6s ease-out';
+            bar.style.opacity = '1';
+        }
+    }
+
     // Fade out the scenario prompt card (called after score is determined)
     fadeOutScenarioCard() {
         const header = document.getElementById('scenario-header');
@@ -774,111 +783,46 @@ export class GameUI {
         `;
     }
     
-    // Display game over screen
+    // Display game over screen — stacked word typography, no card, no stats
     displayGameOver(finalBalance, scenariosCompleted, scenarioHistory) {
-        const balanceHTML = this.displayBalance(finalBalance);
-        
-        // Analyze key moments
-        const keyMoments = [];
-        scenarioHistory.forEach((result, index) => {
-            if (result.context && result.context.includes('emotional')) {
-                keyMoments.push({
-                    scenario: index + 1,
-                    context: result.context,
-                    didSmile: result.didSmile,
-                    verdict: result.verdict
-                });
-            }
-        });
-        
-        const momentsHTML = keyMoments.length > 0 ? `
+        const words = ['WILL', 'I', 'HEAR', 'THAT', 'SOUND', 'AGAIN?'];
+        const wordDivs = words.map((word, i) => `
             <div style="
-                margin: 20px 0;
-                padding: 20px;
-                background: rgba(255, 255, 255, 0.05);
-                border-radius: 8px;
-                text-align: left;
-            ">
-                <div style="font-weight: 600; margin-bottom: 15px;">ANALYSIS:</div>
-                ${keyMoments.map((moment, i) => `
-                    <div style="margin: 10px 0; font-size: 14px; line-height: 1.6;">
-                        • ${moment.didSmile ? 'You calculated' : 'You withheld'} emotion in scenario ${moment.scenario}
-                        ${moment.verdict === 'COERCED' ? ' (under economic pressure)' : ''}
-                    </div>
-                `).join('')}
-            </div>
-        ` : '';
-        
+                font-family: 'Courier New', 'Monaco', monospace;
+                font-size: clamp(2.6rem, 11vw, 6rem);
+                font-weight: 800;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: rgba(255, 255, 255, 0.92);
+                line-height: 1.05;
+                opacity: 0;
+                animation: ending-word-appear 0.9s ease forwards;
+                animation-delay: ${(i * 0.18).toFixed(2)}s;
+            ">${word}</div>
+        `).join('');
+
         return `
-            ${balanceHTML}
+            <style>
+                @keyframes ending-word-appear {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
+            </style>
             <div id="game-over" style="
                 position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 85%;
-                max-width: 100%;
-                background: rgba(10, 10, 10, 0.9);
-                padding: 36px;
-                border-radius: 24px;
-                text-align: left;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                padding: 8% 9%;
+                box-sizing: border-box;
                 z-index: 1000;
-                color: #fff;
-                font-family: 'Courier New', 'Monaco', monospace;
-                box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+                pointer-events: none;
             ">
-                <div style="
-                    font-size: 12px;
-                    font-weight: 600;
-                    margin-bottom: 24px;
-                    color: rgba(255, 255, 255, 0.8);
-                    letter-spacing: 0.4em;
-                    text-transform: uppercase;
-                ">
-                    EMOTIONAL DEBT REACHED
-                </div>
-                
-                <div style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: baseline;
-                    margin-bottom: 14px;
-                    font-size: 12px;
-                    color: rgba(255, 255, 255, 0.8);
-                ">
-                    <span>FINAL BALANCE:</span>
-                    <span>${finalBalance}</span>
-                </div>
-                
-                <div style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: baseline;
-                    margin-bottom: 28px;
-                    font-size: 11px;
-                    color: rgba(255, 255, 255, 0.7);
-                ">
-                    <span>SCENARIOS COMPLETED:</span>
-                    <span>${scenariosCompleted}</span>
-                </div>
-                
-                ${momentsHTML ? momentsHTML.replace(/background: rgba\(255, 255, 255, 0\.05\);/g, 'background: rgba(255, 255, 255, 0.04);').replace(/border-radius: 8px;/g, 'border-radius: 16px;').replace(/color: #[a-f0-9]+/gi, 'color: rgba(255, 255, 255, 0.85)').replace(/border: 1px dotted #[a-f0-9]+;/gi, '').replace(/font-family: [^;]+;/g, "font-family: 'Courier New', 'Monaco', monospace;") : ''}
-                
-                <div style="
-                    margin-top: 56px;
-                    margin-bottom: 32px;
-                    padding: 40px 32px;
-                    font-size: 18px;
-                    line-height: 1.5;
-                    color: #fff;
-                    font-weight: 800;
-                    letter-spacing: 0.25em;
-                    text-transform: uppercase;
-                    text-align: center;
-                    animation: pulse-danger 2s ease-in-out infinite;
-                ">
-                    THE SYSTEM NOW OWNS YOUR EMOTIONAL EXPRESSION.
-                </div>
+                ${wordDivs}
             </div>
         `;
     }
@@ -1634,9 +1578,9 @@ export class GameUI {
                         currentBalance.style.opacity = '1';
                     }
                     if (currentBar) {
+                        // Pre-size the bar but keep it hidden — revealExpressionBar() will show it
                         currentBar.style.width = `${targetWidth}px`;
-                        currentBar.style.transition = 'opacity 0.35s ease-out';
-                        currentBar.style.opacity = '1';
+                        currentBar.style.opacity = '0';
                     }
                     if (currentHeader) {
                         let targetTop;

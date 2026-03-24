@@ -61,140 +61,70 @@ export class GameLoop {
     }
     
     async runGameLoop() {
-        // Game ends when balance goes negative (no round cap)
-        // Point values designed for ~4 rounds to game over
-        while (this.isRunning && !this.gameState.isGameOver() && !this.storyComplete) {
-            // Select scenario
-            this.currentScenario = this.scenarioController.selectScenario(this.gameState);
-            
-            if (!this.currentScenario) {
-                break; // No more scenarios
-            }
-            
-            // Display scenario
-            const skipHandler = () => this.handleSkip();
-            const currentBalance = this.gameState.getBalance();
-            
-            // Ensure container is ready before rendering
-            if (this.container) {
-                // Force multiple reflows to ensure container is properly sized and positioned
-                void this.container.offsetHeight;
-                void this.container.offsetWidth;
-                // Double-check dimensions after a micro-delay
-                await this.delay(10);
-                void this.container.offsetHeight;
-            }
-            
-            this.gameUI.render(
-                this.gameUI.displayScenario(
-                    this.currentScenario,
-                    currentBalance,
-                    skipHandler
-                )
-            );
-            
-            // Store scenario for real-time updates
-            this.gameUI.setCurrentScenario(this.currentScenario);
-            
-            // No skip button - immersive experience, no user interaction
-            // this.gameUI.attachSkipButton();
-            
-            // Wait for elements to be positioned before showing them
-            await this.delay(50);
-            
-            // Allow scenario prompt to display alone for 4 seconds before starting measurement status
-            await this.delay(4000);
-            
-            // Start passive observation
-            const observationData = this.scenarioController.startPassiveObservation(
-                this.currentScenario.observationDuration
-            );
-            
-            // Observe for specified duration with real-time updates
-            const balanceBefore = this.gameState.getBalance();
-            
-            // Prime progress bar in idle state before observation begins
-            this.gameUI.updateProgress(0, this.currentScenario.observationDuration, false);
-            await this.observeFacialResponse(this.currentScenario.observationDuration, balanceBefore);
-            
-            // Get observation data before ending (endObservation clears it)
-            const finalObservationData = this.scenarioController.currentObservationData;
-            
-            // End observation and analyze
-            const observationResult = this.scenarioController.endObservation();
-            
-            // Get comprehensive measurements
-            const measurements = finalObservationData && finalObservationData.intensityHistory 
-                ? this.measurementAnalyzer.calculateComprehensiveMeasurements(
-                    finalObservationData.intensityHistory,
-                    this.mirror.realLandmarks
-                )
-                : null;
-            
-            // Determine if smiled
-            const didSmile = observationResult.didSmile || (measurements && measurements.didSmile);
-            
-            // Calculate final points (calculate but don't apply yet - already done in real-time)
-            let pointsDeducted = 0;
-            let pointsEarned = 0;
-            
-            if (didSmile) {
-                pointsDeducted = Math.abs(this.currentScenario.smileCost);
-            } else {
-                pointsDeducted = Math.abs(this.currentScenario.noSmilePenalty);
-            }
-            
-            // Get interpretation for genuine smile
-            let interpretation = null;
-            if (didSmile && measurements) {
-                interpretation = this.interpretationEngine.evaluateSmile(
-                    measurements,
-                    this.gameState.getCurrentPhase(),
-                    this.currentScenario.context,
-                    this.gameState.getParticipantPattern()
-                );
-                
-                pointsEarned = interpretation.pointsEarned || 0;
-            }
-            
-            // Apply points (if not already applied in real-time)
-            // In real-time version, points are deducted continuously, so we just ensure final state
-            const finalBalance = this.gameState.getBalance();
-            
-            // Update participant pattern
-            this.gameState.updateParticipantPattern(
-                didSmile,
-                measurements ? measurements.intensity : 0
-            );
-            
-            // Prepare result for recording
-            const result = {
-                didSmile,
-                measurements: measurements || null,
-                verdict: interpretation ? interpretation.verdict : 'NO_SMILE',
-                score: interpretation ? interpretation.score : 0,
-                pointsEarned,
-                pointsDeducted,
-                feedbackMessages: interpretation 
-                    ? interpretation.feedbackMessages 
-                    : (observationResult.edgeCases || ['No smile detected.'])
-            };
-            
-            // Record scenario result
-            this.gameState.recordScenarioResult({
-                scenarioId: this.currentScenario.id,
-                ...result,
-                category: this.currentScenario.category
-            });
-            
-            // End if balance gone or story fully told
-            if (this.gameState.isGameOver() || this.storyComplete) {
-                this.endGame();
-                return;
-            }
+        // Single-scenario experience: pick one random trust-phase scenario, then tell the story.
+        this.currentScenario = this.scenarioController.selectScenario(this.gameState);
+
+        if (!this.currentScenario || !this.isRunning) {
+            this.endGame();
+            return;
         }
-        
-        // If we exit the loop but haven't reached game over, end the game
+
+        // Ensure container is ready
+        if (this.container) {
+            void this.container.offsetHeight;
+            void this.container.offsetWidth;
+            await this.delay(10);
+            void this.container.offsetHeight;
+        }
+
+        // Display the single scenario (balance shown for context but no multi-round logic)
+        const currentBalance = this.gameState.getBalance();
+        this.gameUI.render(
+            this.gameUI.displayScenario(this.currentScenario, currentBalance, () => {})
+        );
+        this.gameUI.setCurrentScenario(this.currentScenario);
+
+        await this.delay(50);
+
+        // Prompt-only phase before measurement begins
+        await this.delay(4000);
+
+        // Observe facial response for the scenario duration
+        this.scenarioController.startPassiveObservation(this.currentScenario.observationDuration);
+        const balanceBefore = this.gameState.getBalance();
+        this.gameUI.updateProgress(0, this.currentScenario.observationDuration, false);
+        await this.observeFacialResponse(this.currentScenario.observationDuration, balanceBefore);
+
+        // Freeze progress bar
+        this.gameUI.updateProgress(100, this.currentScenario.observationDuration, false);
+
+        // Brief pause so the score bar registers visually, then fade the scenario card
+        await this.delay(1000);
+        this.gameUI.fadeOutScenarioCard();
+        await this.delay(900);
+
+        // Hide the score/balance UI — story takes over the whole mirror
+        const expressionWrap = document.getElementById('expression-progress-wrap');
+        if (expressionWrap) {
+            expressionWrap.style.transition = 'opacity 0.8s ease';
+            expressionWrap.style.opacity = '0';
+            setTimeout(() => { expressionWrap.style.display = 'none'; }, 800);
+        }
+        const balanceEl = document.getElementById('balance-display');
+        if (balanceEl) {
+            balanceEl.style.transition = 'opacity 0.8s ease';
+            balanceEl.style.opacity = '0';
+            setTimeout(() => { balanceEl.style.display = 'none'; }, 800);
+        }
+
+        // Signal MirrorStory to begin the sequential story display
+        document.dispatchEvent(new CustomEvent('mirror-sequential-story-start'));
+
+        // Wait until all story paragraphs have been shown
+        await new Promise((resolve) => {
+            document.addEventListener('mirror-sequential-story-done', resolve, { once: true });
+        });
+
         if (this.isRunning) {
             this.endGame();
         }
@@ -211,6 +141,8 @@ export class GameLoop {
         let lastSmilingScore = null;
         let pointsDeductedSoFar = 0;
         const updateInterval = 100; // Update UI every 100ms
+        const LIVE_WINDOW = 5; // seconds before end when bar becomes active
+        let barRevealed = false;
         
         const observe = async () => {
             while (Date.now() < endTime && this.isRunning) {
@@ -261,18 +193,24 @@ export class GameLoop {
                             potentialDeduction = Math.abs(this.currentScenario.smileCost);
                         }
                         
-                        // Update UI in real-time
-                        if (now - lastUpdateTime >= updateInterval) {
-                            const currentBalance = this.gameState.getBalance();
-                            this.gameUI.updateRealTimeStatus(
-                                currentMetrics.smilingScore,
-                                currentBalance,
-                                balanceBefore,
-                                isGenuine,
-                                thresholds // Pass dynamic thresholds to UI
-                            );
-                            
-                            lastUpdateTime = now;
+                        // Only update the expression bar in the final LIVE_WINDOW seconds
+                        const inLiveWindow = elapsed >= (duration - LIVE_WINDOW);
+                        if (inLiveWindow) {
+                            if (!barRevealed) {
+                                this.gameUI.revealExpressionBar();
+                                barRevealed = true;
+                            }
+                            if (now - lastUpdateTime >= updateInterval) {
+                                const currentBalance = this.gameState.getBalance();
+                                this.gameUI.updateRealTimeStatus(
+                                    currentMetrics.smilingScore,
+                                    currentBalance,
+                                    balanceBefore,
+                                    isGenuine,
+                                    thresholds
+                                );
+                                lastUpdateTime = now;
+                            }
                         }
                         
                     }
@@ -314,29 +252,7 @@ export class GameLoop {
             chargeAmount = -Math.abs(this.currentScenario.smileCost);
             this.gameState.deductPoints(Math.abs(this.currentScenario.smileCost));
         }
-        const newBalance = this.gameState.getBalance();
-        this.gameUI.animateChargeToBalance(chargeAmount, newBalance);
-        // Wait for charge animation, then fade out scenario card
-        await this.delay(1200);
-        this.gameUI.fadeOutScenarioCard();
-        // Wait for card to fully fade (0.7s + buffer)
-        await this.delay(900);
-        // Signal story text to appear (card is now gone)
-        document.dispatchEvent(new CustomEvent('mirror-story-show'));
-        // Wait until MirrorStory signals that all phrases in this chunk have faded.
-        // Duration is proportional to phrase count — short chunks (e.g. "I see you") resolve quickly.
-        await new Promise((resolve) => {
-            const MAX_WAIT = 18000; // safety cap
-            const timeout = setTimeout(resolve, MAX_WAIT);
-            document.addEventListener('mirror-story-chunk-done', function handler() {
-                document.removeEventListener('mirror-story-chunk-done', handler);
-                clearTimeout(timeout);
-                resolve();
-            });
-        });
-        // Signal story text to fade out (cleans up container) and wait for DOM removal
-        document.dispatchEvent(new CustomEvent('mirror-story-fadeout'));
-        await this.delay(2000);
+        // Score recorded — inter-scenario transitions handled by runGameLoop
     }
     
     async handleSkip() {

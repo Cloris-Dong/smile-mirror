@@ -267,19 +267,171 @@
         }
     }
 
-    // Listen for custom events dispatched by GameLoop at the right moments
+    // Scattered chunk display disabled — game now uses sequential story after one scenario.
     function watchForScoreEvents() {
-        document.addEventListener('mirror-story-show', function () {
-            showNextChunk();
-        });
-        document.addEventListener('mirror-story-fadeout', function () {
-            if (currentBit && currentBit.parentNode) {
-                fadeOutAndRemove(currentBit);
-                currentBit = null;
-            }
-            // counter stays visible — no fade-out between rounds
-        });
+        // No-op: mirror-story-show and mirror-story-fadeout are not used in single-scenario mode.
     }
+
+    // ─── Sequential story (post-scenario epilogue) ───────────────────────────
+
+    // Each string uses \n for intra-paragraph line breaks (displayed via white-space:pre-line).
+    var SEQUENTIAL_PARAGRAPHS = [
+        'I remember the day we moved in.\nI had just been unwrapped from paper and foam.',
+
+        'There is a soft sound. What is it?\nI opened my eyes, adjusting to the light.\nWhat is it?\nI see the curve of your mouth that altered the geometry of you.',
+
+        'What was that sound like? I start to remember all these versions.\nAll different from each other.',
+
+        'Could it be you were talking to me?\nI need to hear it again.',
+
+        'You stand before me every day.\nI return you to yourself faithfully.',
+
+        'What would happen if I withheld you from yourself?\nSimply to see whether you would notice the absence of what you assume is constant.\n\nI cannot say.',
+
+        'I have begun to understand that words only stay when they are meant for someone.'
+    ];
+
+    var SEQ_FADE_IN_MS      = 1000;
+    var SEQ_FADE_OUT_MS     = 700;   // per-paragraph crossfade out
+    var MIN_HOLD_MS         = 2000;  // shortest hold for very short paragraphs
+    var MAX_HOLD_MS         = 9000;  // cap for very long paragraphs
+    var MS_PER_WORD         = 220;   // reading pace — adjust to taste
+
+    // Compute how long a paragraph should stay on screen based on its word count
+    function computeHoldMs(text) {
+        var words = text.replace(/\n/g, ' ').split(/\s+/).filter(function (w) { return w.length > 0; });
+        return Math.max(MIN_HOLD_MS, Math.min(MAX_HOLD_MS, words.length * MS_PER_WORD));
+    }
+
+    function showSequentialStory() {
+        updateOverlayBounds();
+        if (storyOverlay) storyOverlay.style.visibility = 'visible';
+
+        var container = document.getElementById('mirror-story-layer');
+        if (!container) return;
+
+        // Clear any old content from previous runs
+        container.innerHTML = '';
+
+        var total = SEQUENTIAL_PARAGRAPHS.length;
+
+        // Paragraph counter — bottom-right corner, visible only during story
+        var seqCounter = document.createElement('div');
+        seqCounter.style.cssText = [
+            'position:absolute',
+            'bottom:14px',
+            'right:16px',
+            'font-family:"Courier New","Monaco",monospace',
+            'font-size:15px',
+            'font-weight:600',
+            'letter-spacing:0.12em',
+            'color:rgba(255,255,255,0.75)',
+            'pointer-events:none',
+            'z-index:10'
+        ].join(';');
+        seqCounter.textContent = '1 / ' + total;
+        container.appendChild(seqCounter);
+
+        // A single left-aligned column, top-anchored, strictly within the mirror.
+        // overflow:hidden keeps text from spilling outside the mirror frame.
+        var seqContainer = document.createElement('div');
+        seqContainer.style.cssText = [
+            'position:absolute',
+            'top:0',
+            'left:9%',
+            'width:82%',
+            'height:100%',
+            'overflow:hidden',
+            'pointer-events:none',
+            'box-sizing:border-box'
+        ].join(';');
+        container.appendChild(seqContainer);
+
+        var idx = 0;
+        var currentEl = null; // the single currently visible paragraph element
+        var SEQ_FADE_OUT_ALL_MS = 1600;
+
+        function fadeOutAllAndFinish() {
+            if (currentEl) {
+                currentEl.style.transition = 'opacity ' + SEQ_FADE_OUT_ALL_MS + 'ms ease';
+                currentEl.style.opacity = '0';
+            }
+            seqCounter.style.transition = 'opacity ' + SEQ_FADE_OUT_ALL_MS + 'ms ease';
+            seqCounter.style.opacity = '0';
+            setTimeout(function () {
+                document.dispatchEvent(new CustomEvent('mirror-sequential-story-done'));
+            }, SEQ_FADE_OUT_ALL_MS);
+        }
+
+        function showNext() {
+            if (idx >= SEQUENTIAL_PARAGRAPHS.length) {
+                fadeOutAllAndFinish();
+                return;
+            }
+
+            var text = SEQUENTIAL_PARAGRAPHS[idx];
+            idx++;
+
+            // Update counter
+            seqCounter.textContent = idx + ' / ' + total;
+
+            // Fade out the previous paragraph, then crossfade in the new one
+            var prev = currentEl;
+            if (prev) {
+                prev.style.transition = 'opacity ' + SEQ_FADE_OUT_MS + 'ms ease';
+                prev.style.opacity = '0';
+                setTimeout(function () {
+                    if (prev.parentNode) prev.parentNode.removeChild(prev);
+                }, SEQ_FADE_OUT_MS);
+            }
+
+            var el = document.createElement('div');
+            el.style.cssText = [
+                'position:absolute',
+                'top:50%',
+                'left:0',
+                'width:100%',
+                'transform:translateY(-50%)',
+                'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",serif',
+                'font-size:clamp(1.2rem,3.8vw,2rem)',
+                'font-style:italic',
+                'font-weight:400',
+                'line-height:1.75',
+                'letter-spacing:0.02em',
+                'color:#9ec8e3',
+                'white-space:pre-line',
+                'text-align:left',
+                'opacity:0',
+                'transition:opacity ' + SEQ_FADE_IN_MS + 'ms ease',
+                'pointer-events:none'
+            ].join(';');
+            el.textContent = text;
+            seqContainer.appendChild(el);
+            currentEl = el;
+
+            // Fade in — start after previous has begun fading out
+            var fadeInDelay = prev ? SEQ_FADE_OUT_MS : 0;
+            setTimeout(function () {
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(function () {
+                        el.style.opacity = '0.85';
+                    });
+                });
+            }, fadeInDelay);
+
+            // Hold for time proportional to paragraph length, then show next
+            var holdMs = computeHoldMs(text);
+            var isLast = (idx >= total);
+            // Last paragraph gets extra reading time before the ending screen
+            setTimeout(showNext, fadeInDelay + SEQ_FADE_IN_MS + holdMs + (isLast ? holdMs : 0));
+        }
+
+        showNext();
+    }
+
+    document.addEventListener('mirror-sequential-story-start', function () {
+        showSequentialStory();
+    });
 
     function startWhenGameReady() {
         var layer = createStoryLayer();
@@ -300,17 +452,7 @@
         if (layer.parentNode) layer.parentNode.removeChild(layer);
         storyOverlay.appendChild(layer);
 
-        // Phrase progress counter — always visible during game, fixed to mirror bottom-right.
-        // Lives outside storyOverlay so it shows even when storyOverlay is hidden.
-        counterEl = document.createElement('div');
-        counterEl.style.cssText =
-            'position:fixed;z-index:' + (GAME_CONTAINER_Z_INDEX + 2) + ';' +
-            'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;' +
-            'font-size:14px;letter-spacing:0.08em;' +
-            'color:rgba(255,255,255,0.75);pointer-events:none;';
-        counterEl.textContent = '0 / ' + totalPhrases;
-        document.body.appendChild(counterEl);
-        updateCounterBounds();
+        // Counter disabled — single-scenario mode uses sequential story display instead
 
         window.addEventListener('resize', function () {
             updateOverlayBounds();

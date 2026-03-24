@@ -999,6 +999,10 @@ class DigitalMirror {
         if (this.smileLevel >= this.maxSmileLevel) {
             return; // Already at maximum level
         }
+        // Ignore if an analysis is already in progress to prevent smileLevel skipping
+        if (this.isAnalyzing) {
+            return;
+        }
         
         // If this is the first claim (smileLevel 0), transition from welcome to gatekeeper
         if (this.smileLevel === 0) {
@@ -1400,6 +1404,11 @@ class DigitalMirror {
     
     // Start real-time facial analysis overlay
     startFakeAnalysis() {
+        // Clear any previously running analysis timer before starting a new one
+        if (this.analysisTimer) {
+            clearInterval(this.analysisTimer);
+            this.analysisTimer = null;
+        }
         this.isAnalyzing = true;
         
         // Create facial analysis overlay on mirror surface
@@ -2369,6 +2378,7 @@ class DigitalMirror {
                     this.drawMeasurementLabels(ctx);
                 }
                 
+                this.isAnalyzing = false; // Allow the second claim to be processed
                 this.updateAIMessage(`That's not your real smile. ${scoreData.score}%. Let's give it another try.`);
                 setTimeout(() => {
                     this.updateAIMessage(`Say "I am human."`);
