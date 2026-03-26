@@ -47,7 +47,7 @@ export class GameLoop {
             ];
             this.gameUI.runTypingSequence(introTarget, introScript);
         }
-        await this.delay(9000); // Give the intro typing animation time to finish
+        await this.delay(7500); // Give the intro typing animation time to finish
         
         // Start game loop
         await this.runGameLoop();

@@ -117,10 +117,7 @@ export class GameUI {
                         color: rgba(255, 255, 255, 0.85);
                     ">
                         <span id="intro-typed-text" style="
-                            border-right: 2px solid rgba(255, 255, 255, 0.55);
-                            padding-right: 6px;
                             display: inline-block;
-                            animation: caretIntro 0.9s step-end infinite;
                         "></span>
                     </div>
                 </div>
@@ -1578,7 +1575,7 @@ export class GameUI {
                         currentBalance.style.opacity = '1';
                     }
                     if (currentBar) {
-                        // Pre-size the bar but keep it hidden — revealExpressionBar() will show it
+                        // Pre-size the bar but keep it hidden — revealExpressionBar() shows it only when score data arrives
                         currentBar.style.width = `${targetWidth}px`;
                         currentBar.style.opacity = '0';
                     }

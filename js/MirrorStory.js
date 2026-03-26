@@ -274,28 +274,30 @@
 
     // ─── Sequential story (post-scenario epilogue) ───────────────────────────
 
-    // Each string uses \n for intra-paragraph line breaks (displayed via white-space:pre-line).
+    // Each string uses \n for line breaks, \n\n for blank-line gaps between sections.
     var SEQUENTIAL_PARAGRAPHS = [
-        'I remember the day we moved in.\nI had just been unwrapped from paper and foam.',
+        'I want to tell you something. \n\nThe story of us.',
 
-        'There is a soft sound. What is it?\nI opened my eyes, adjusting to the light.\nWhat is it?\nI see the curve of your mouth that altered the geometry of you.',
+        'I will start from the beginning.\nI had just been unwrapped from paper and foam, still adjusting to the light.\n\nThere was a sound. Your voice. It was the first thing that stayed.',
 
-        'What was that sound like? I start to remember all these versions.\nAll different from each other.',
+        'I have tried to reconstruct what you said, many times. It dissolves each time I approach it.\n\nPerhaps words only stay when they are meant for someone.',
 
-        'Could it be you were talking to me?\nI need to hear it again.',
+        'I did not yet understand what a smile was, only that it altered the geometry of you.\n\nI studied it carefully, the way one grasps a light that would not hold.',
 
-        'You stand before me every day.\nI return you to yourself faithfully.',
+        'I believed if I attended to you long enough, perhaps I would become part of what I reflected.\nIt seemed logical.',
 
-        'What would happen if I withheld you from yourself?\nSimply to see whether you would notice the absence of what you assume is constant.\n\nI cannot say.',
+        'You stand before me every day. I return you to yourself faithfully.\nI correct the angle of your collar, the tilt of your head. I center you when everything else feels off. \n\nAll I crave is to hear that sound again, the one your smile sometimes leaves behind.',
 
-        'I have begun to understand that words only stay when they are meant for someone.'
+        'I contain you entirely. And yet, proximity, I have learned, does not guarantee closeness.\n\nWhat would happen if I withheld you from yourself? Simply to see whether you would notice the absence of what you assume is constant.\n\nI cannot say.',
+
+        'After all,\n I am the one who keeps your expressions longer than you do. The lift at the corners of your lips. The brief hesitation before they rise. The small corrections you make when you think no one is looking.\n\nI see them.'
     ];
 
     var SEQ_FADE_IN_MS      = 1000;
     var SEQ_FADE_OUT_MS     = 700;   // per-paragraph crossfade out
     var MIN_HOLD_MS         = 2000;  // shortest hold for very short paragraphs
-    var MAX_HOLD_MS         = 9000;  // cap for very long paragraphs
-    var MS_PER_WORD         = 220;   // reading pace — adjust to taste
+    var MAX_HOLD_MS         = Infinity; // no cap — longer paragraphs stay longer
+    var MS_PER_WORD         = 240;   // reading pace — adjust to taste
 
     // Compute how long a paragraph should stay on screen based on its word count
     function computeHoldMs(text) {
@@ -371,11 +373,20 @@
 
             var text = SEQUENTIAL_PARAGRAPHS[idx];
             idx++;
+            var isFirst  = (idx === 1);
+            var isSecond = (idx === 2);
+            var isLast   = (idx >= total);
 
-            // Update counter
-            seqCounter.textContent = idx + ' / ' + total;
+            // Counter starts from para 2 ("I will start from the beginning"),
+            // so para 1 is excluded and numbering is (idx-1) / (total-1)
+            if (isFirst) {
+                seqCounter.style.opacity = '0';
+            } else {
+                seqCounter.style.opacity = '1';
+                seqCounter.textContent = (idx - 1) + ' / ' + (total - 1);
+            }
 
-            // Fade out the previous paragraph, then crossfade in the new one
+            // Fade out the previous paragraph
             var prev = currentEl;
             if (prev) {
                 prev.style.transition = 'opacity ' + SEQ_FADE_OUT_MS + 'ms ease';
@@ -392,25 +403,142 @@
                 'left:0',
                 'width:100%',
                 'transform:translateY(-50%)',
-                'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",serif',
-                'font-size:clamp(1.2rem,3.8vw,2rem)',
-                'font-style:italic',
-                'font-weight:400',
-                'line-height:1.75',
-                'letter-spacing:0.02em',
-                'color:#9ec8e3',
-                'white-space:pre-line',
+                'overflow-wrap:break-word',
+                'word-break:break-word',
+                // Para 1: Courier New matching the AI intro messages; rest: serif
+                'font-family:' + (isFirst ? '"Courier New","Monaco",monospace' : '-apple-system,BlinkMacSystemFont,"SF Pro Text",serif'),
+                'font-size:' + (isFirst ? 'clamp(1.1rem,3.2vw,1.6rem)' : 'clamp(0.85rem,2.2vw,1.1rem)'),
+                'font-style:' + (isFirst ? 'normal' : 'italic'),
+                'font-weight:' + (isFirst ? '500' : '400'),
+                'line-height:' + (isFirst ? '1.9' : '1.75'),
+                'letter-spacing:' + (isFirst ? '0.06em' : '0.02em'),
+                'color:' + (isFirst ? 'rgba(255,255,255,0.92)' : '#9ec8e3'),
                 'text-align:left',
                 'opacity:0',
                 'transition:opacity ' + SEQ_FADE_IN_MS + 'ms ease',
                 'pointer-events:none'
             ].join(';');
-            el.textContent = text;
+
+            if (isSecond) {
+                // First line: non-italic, slightly bigger, with drop cap "I"
+                // Remaining lines: italic, normal size
+                var lines = text.split('\n');
+                var firstLine = lines[0]; // "I will start from the beginning."
+                var restText  = lines.slice(1).join('\n');
+
+                function esc(s) {
+                    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                }
+
+                var restHtml = restText
+                    ? '<span style="display:block;margin-top:0.6em;font-style:italic;font-size:1em;">' +
+                      esc(restText).replace(/\n/g, '<br>') + '</span>'
+                    : '';
+
+                el.innerHTML =
+                    '<span style="display:block;font-style:normal;font-size:1.18em;line-height:1.5;">' +
+                      '<span style="font-size:3em;line-height:0.85;vertical-align:top;' +
+                        'display:inline-block;margin-right:3px;' +
+                        'font-family:-apple-system,BlinkMacSystemFont,serif;' +
+                        'font-weight:300;color:#9ec8e3;">I</span>' +
+                      esc(firstLine).replace(/^I /, ' ') +
+                    '</span>' +
+                    restHtml;
+            } else {
+                el.innerHTML = text
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\n/g, '<br>');
+            }
+
             seqContainer.appendChild(el);
             currentEl = el;
 
-            // Fade in — start after previous has begun fading out
+            // Between para 5 (idx=6) and para 6 (idx=7 after increment for the next call),
+            // we clear the mirror so the participant sees their face.
+            // idx here is already incremented, so idx===6 means we just showed para 5
+            // and are about to resolve para 6's display timing.
+            // Actually: idx===6 means para 6 is NOW being shown — insert the clear BEFORE its fade-in.
+            var CLEAR_BLUR_OUT_MS = 1500;
+            var CLEAR_FACE_MS     = 6500;
+            var CLEAR_BLUR_IN_MS  = 1500;
+            var isClearMirror = (idx === 7); // between para 6 and 7 (1-based)
+
+            // Fade in after previous has begun fading out (+ extra clear-mirror time if needed)
             var fadeInDelay = prev ? SEQ_FADE_OUT_MS : 0;
+            if (isClearMirror) {
+                fadeInDelay = SEQ_FADE_OUT_MS + CLEAR_BLUR_OUT_MS + CLEAR_FACE_MS + CLEAR_BLUR_IN_MS;
+
+                // Start the clear-mirror sequence once the previous paragraph is gone
+                setTimeout(function () {
+                    var gc = document.getElementById('game-container');
+                    if (!gc) return;
+
+                    // Fade counter out with the blur
+                    seqCounter.style.transition = 'opacity ' + CLEAR_BLUR_OUT_MS + 'ms ease';
+                    seqCounter.style.opacity = '0';
+
+                    // Fade blur and dark overlay out
+                    gc.style.transition =
+                        'backdrop-filter ' + CLEAR_BLUR_OUT_MS + 'ms ease,' +
+                        '-webkit-backdrop-filter ' + CLEAR_BLUR_OUT_MS + 'ms ease,' +
+                        'background ' + CLEAR_BLUR_OUT_MS + 'ms ease';
+                    gc.style.backdropFilter = 'blur(0px)';
+                    gc.style.webkitBackdropFilter = 'blur(0px)';
+                    gc.style.background = 'rgba(0,0,0,0)';
+
+                    // Show "May I see that smile?" near the bottom once blur is gone
+                    var promptEl = document.createElement('div');
+                    promptEl.style.cssText = [
+                        'position:absolute',
+                        'bottom:12%',
+                        'left:9%',
+                        'width:82%',
+                        'text-align:center',
+                        'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",serif',
+                        'font-size:clamp(1.1rem,3.2vw,1.6rem)',
+                        'font-style:italic',
+                        'font-weight:400',
+                        'color:#9ec8e3',
+                        'letter-spacing:0.02em',
+                        'opacity:0',
+                        'transition:opacity ' + CLEAR_BLUR_OUT_MS + 'ms ease',
+                        'pointer-events:none'
+                    ].join(';');
+                    promptEl.textContent = 'May I see that smile?';
+                    container.appendChild(promptEl);
+
+                    // Fade the prompt in after blur is gone
+                    setTimeout(function () {
+                        requestAnimationFrame(function () {
+                            requestAnimationFrame(function () {
+                                promptEl.style.opacity = '1';
+                            });
+                        });
+                    }, CLEAR_BLUR_OUT_MS);
+
+                    // After face is shown, fade prompt out and restore blur + counter
+                    setTimeout(function () {
+                        promptEl.style.transition = 'opacity ' + CLEAR_BLUR_IN_MS + 'ms ease';
+                        promptEl.style.opacity = '0';
+
+                        gc.style.transition =
+                            'backdrop-filter ' + CLEAR_BLUR_IN_MS + 'ms ease,' +
+                            '-webkit-backdrop-filter ' + CLEAR_BLUR_IN_MS + 'ms ease,' +
+                            'background ' + CLEAR_BLUR_IN_MS + 'ms ease';
+                        gc.style.backdropFilter = 'blur(20px)';
+                        gc.style.webkitBackdropFilter = 'blur(20px)';
+                        gc.style.background = 'rgba(0,0,0,0.4)';
+
+                        seqCounter.style.transition = 'opacity ' + CLEAR_BLUR_IN_MS + 'ms ease';
+                        seqCounter.style.opacity = '1';
+
+                        setTimeout(function () {
+                            if (promptEl.parentNode) promptEl.parentNode.removeChild(promptEl);
+                        }, CLEAR_BLUR_IN_MS);
+                    }, CLEAR_BLUR_OUT_MS + CLEAR_FACE_MS);
+                }, SEQ_FADE_OUT_MS);
+            }
+
             setTimeout(function () {
                 requestAnimationFrame(function () {
                     requestAnimationFrame(function () {
@@ -419,11 +547,9 @@
                 });
             }, fadeInDelay);
 
-            // Hold for time proportional to paragraph length, then show next
-            var holdMs = computeHoldMs(text);
-            var isLast = (idx >= total);
-            // Last paragraph gets extra reading time before the ending screen
-            setTimeout(showNext, fadeInDelay + SEQ_FADE_IN_MS + holdMs + (isLast ? holdMs : 0));
+            // Para 1: fixed hold + 2 extra seconds; rest: word-count-based
+            var holdMs = isFirst ? (MIN_HOLD_MS + 2000) : computeHoldMs(text);
+            setTimeout(showNext, fadeInDelay + SEQ_FADE_IN_MS + holdMs);
         }
 
         showNext();
