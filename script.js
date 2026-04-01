@@ -71,14 +71,6 @@ class DigitalMirror {
             maxHistory: 120 // Keep last 120 frames (4 seconds at 30fps) for dynamic adjustment
         };
         
-        // Tutorial audio and captions
-        this.tutorialAudio = null;
-        this.captions = [];
-        this.currentCaptionIndex = 0;
-        this.captionTimer = null;
-        this.captionStartTime = null;
-        this.audioStarted = false;
-        
         // Emotional Economics Game
         this.gameLoop = null;
         this.gameContainer = null;
@@ -2741,254 +2733,6 @@ class DigitalMirror {
         document.body.appendChild(debugBtn);
     }
     
-    // Start countdown before tutorial
-    startTutorialCountdown() {
-        let countdown = 3;
-        
-        const updateCountdown = () => {
-            if (countdown > 0) {
-                this.updateAIMessage(`Tutorial starting in ${countdown}...`);
-                countdown--;
-                setTimeout(updateCountdown, 1000);
-            } else {
-                setTimeout(() => {
-                    this.startTutorialAudio();
-                }, 500);
-            }
-        };
-        
-        updateCountdown();
-    }
-    
-    
-    // Start tutorial audio with synchronized captions
-    async startTutorialAudio() {
-        // Prevent multiple audio instances
-        if (this.audioStarted) {
-            console.log('Audio already started, ignoring duplicate call');
-            return;
-        }
-        
-        try {
-            console.log('Starting tutorial audio...');
-            this.audioStarted = true;
-            
-            // Load captions from timing.json
-            console.log('Loading captions from timing.json...');
-            const response = await fetch('timing.json');
-            if (!response.ok) {
-                throw new Error(`Failed to load timing.json: ${response.status}`);
-            }
-            const data = await response.json();
-            this.captions = data.captions;
-            console.log('Captions loaded:', this.captions.length, 'captions');
-            
-            // Create and setup audio element
-            console.log('Creating audio element...');
-            this.tutorialAudio = new Audio('Trial0_mixdown.mp3');
-            this.tutorialAudio.preload = 'auto';
-            
-            // Add event listeners for debugging
-            this.tutorialAudio.addEventListener('loadstart', () => console.log('Audio: Load started'));
-            this.tutorialAudio.addEventListener('loadeddata', () => console.log('Audio: Data loaded'));
-            this.tutorialAudio.addEventListener('canplay', () => console.log('Audio: Can play'));
-            this.tutorialAudio.addEventListener('canplaythrough', () => console.log('Audio: Can play through'));
-            this.tutorialAudio.addEventListener('play', () => console.log('Audio: Started playing'));
-            this.tutorialAudio.addEventListener('pause', () => console.log('Audio: Paused'));
-            this.tutorialAudio.addEventListener('ended', () => console.log('Audio: Ended'));
-            this.tutorialAudio.addEventListener('error', (e) => {
-                console.error('Audio error:', e);
-                console.error('Audio error details:', this.tutorialAudio.error);
-            });
-            
-            // Create caption display element
-            this.createCaptionDisplay();
-            
-            // Hide AI assistant during tutorial
-            if (this.aiAssistant) {
-                this.aiAssistant.style.display = 'none';
-            }
-            
-            // Start audio and captions
-            console.log('Attempting to play audio...');
-            
-            // Handle browser autoplay policies
-            const playAudio = async () => {
-                try {
-                    const playPromise = this.tutorialAudio.play();
-                    
-                    if (playPromise !== undefined) {
-                        await playPromise;
-                        console.log('Audio play promise resolved');
-                        this.startCaptionSync();
-                    } else {
-                        console.log('Audio play() returned undefined');
-                        this.startCaptionSync();
-                    }
-                } catch (error) {
-                    console.error('Audio play promise rejected:', error);
-                    
-                    // Handle autoplay policy - show user interaction prompt
-                    if (error.name === 'NotAllowedError') {
-                        this.updateAIMessage('Click anywhere to start the tutorial audio.');
-                        this.addAudioInteractionPrompt();
-                    } else {
-                        this.updateAIMessage('Audio playback failed. Please check browser permissions.');
-                    }
-                }
-            };
-            
-            playAudio();
-            
-        } catch (error) {
-            console.error('Error starting tutorial audio:', error);
-            this.updateAIMessage('Sorry, tutorial audio failed to load. Try again later.');
-        }
-    }
-    
-    // Create mirror voice display
-    createCaptionDisplay() {
-        // Remove existing caption display if any
-        const existingCaption = document.querySelector('.tutorial-captions');
-        if (existingCaption) {
-            existingCaption.remove();
-        }
-        
-        // Create mirror voice container
-        const captionContainer = document.createElement('div');
-        captionContainer.className = 'tutorial-captions';
-        
-        // Create mirror voice text element
-        const mirrorVoice = document.createElement('div');
-        mirrorVoice.className = 'mirror-voice';
-        mirrorVoice.textContent = '';
-        
-        captionContainer.appendChild(mirrorVoice);
-        
-        // Add to mirror surface
-        const mirrorSurface = document.querySelector('.mirror-surface');
-        mirrorSurface.appendChild(captionContainer);
-        
-        this.captionDisplay = captionContainer;
-        this.mirrorVoiceElement = mirrorVoice;
-    }
-    
-    // Start synchronized caption display
-    startCaptionSync() {
-        if (!this.tutorialAudio || !this.captions) {
-            console.error('Cannot start caption sync: audio or captions not ready');
-            return;
-        }
-        
-        this.currentCaptionIndex = 0;
-        this.audioStartTime = Date.now();
-        this.scheduleNextCaption();
-    }
-    
-    // Schedule the next caption to appear at its proper start time
-    scheduleNextCaption() {
-        if (!this.captions || this.currentCaptionIndex >= this.captions.length) {
-            this.hideCaptions();
-            return;
-        }
-        
-        const caption = this.captions[this.currentCaptionIndex];
-        const currentTime = Date.now();
-        const timeSinceAudioStart = currentTime - this.audioStartTime;
-        const captionStartTimeMs = caption.start * 1000; // Convert to milliseconds
-        
-        // Calculate how long to wait until this caption should appear
-        const timeUntilCaptionStart = captionStartTimeMs - timeSinceAudioStart;
-        
-        console.log(`Caption ${this.currentCaptionIndex}: "${caption.text}" - Start time: ${caption.start}s, Wait: ${timeUntilCaptionStart}ms`);
-        
-        if (timeUntilCaptionStart <= 0) {
-            // Caption should appear immediately (we're behind schedule)
-            this.showCaption(caption);
-        } else {
-            // Schedule caption to appear at the correct time
-            this.captionTimer = setTimeout(() => {
-                this.showCaption(caption);
-            }, timeUntilCaptionStart);
-        }
-    }
-    
-    // Show a caption with typewriter effect from the mirror
-    showCaption(caption) {
-        if (this.captionDisplay && this.mirrorVoiceElement) {
-            this.captionDisplay.style.opacity = '1';
-            this.captionDisplay.classList.add('show');
-            
-            // Typewriter effect - text appears character by character
-            this.typewriterText(caption.text, () => {
-                // Calculate when this caption should end
-                const currentTime = Date.now();
-                const timeSinceAudioStart = currentTime - this.audioStartTime;
-                const captionEndTimeMs = caption.end * 1000;
-                const timeUntilCaptionEnd = captionEndTimeMs - timeSinceAudioStart;
-                
-                // Schedule caption to fade out at the correct time
-                this.captionTimer = setTimeout(() => {
-                    this.captionDisplay.style.opacity = '0';
-                    this.captionDisplay.classList.remove('show');
-                    setTimeout(() => {
-                        this.currentCaptionIndex++;
-                        this.scheduleNextCaption();
-                    }, 400); // Fade out duration
-                }, Math.max(0, timeUntilCaptionEnd));
-            });
-        }
-    }
-    
-    // Typewriter effect for mirror voice
-    typewriterText(text, onComplete) {
-        if (!this.mirrorVoiceElement) return;
-        
-        this.mirrorVoiceElement.textContent = '';
-        this.mirrorVoiceElement.classList.add('typing');
-        
-        let index = 0;
-        const typeInterval = setInterval(() => {
-            if (index < text.length) {
-                this.mirrorVoiceElement.textContent += text[index];
-                index++;
-            } else {
-                clearInterval(typeInterval);
-                this.mirrorVoiceElement.classList.remove('typing');
-                if (onComplete) onComplete();
-            }
-        }, 50); // 50ms per character for natural speaking pace
-    }
-    
-    // Hide captions and clean up
-    hideCaptions() {
-        if (this.captionDisplay) {
-            this.captionDisplay.style.opacity = '0';
-            setTimeout(() => {
-                if (this.captionDisplay) {
-                    this.captionDisplay.remove();
-                    this.captionDisplay = null;
-                }
-            }, 300);
-        }
-        
-        if (this.captionTimer) {
-            clearTimeout(this.captionTimer);
-            this.captionTimer = null;
-        }
-        
-        // Show AI assistant again and start countdown to reset
-        if (this.aiAssistant) {
-            this.aiAssistant.style.display = 'block';
-        }
-        
-        // Open captured face images after tutorial
-        this.openCapturedImages();
-        
-        // Start countdown to reset
-        this.startResetCountdown();
-    }
-    
     // Start countdown to refresh the page and restart experience
     startResetCountdown() {
         // Clear any existing reset countdown
@@ -3004,45 +2748,8 @@ class DigitalMirror {
         }, 1500); // 1.5 second delay before restart
     }
     
-    // Add user interaction prompt for autoplay
-    addAudioInteractionPrompt() {
-        const clickHandler = () => {
-            console.log('User interaction detected, attempting to play audio...');
-            if (this.tutorialAudio) {
-                this.tutorialAudio.play().then(() => {
-                    console.log('Audio started after user interaction');
-                    this.startCaptionSync();
-                }).catch(error => {
-                    console.error('Audio still failed after user interaction:', error);
-                    this.updateAIMessage('Audio playback failed. Please check browser settings.');
-                });
-            }
-            
-            // Remove the click handler after first interaction
-            document.removeEventListener('click', clickHandler);
-            document.removeEventListener('touchstart', clickHandler);
-        };
-        
-        // Add click and touch listeners
-        document.addEventListener('click', clickHandler);
-        document.addEventListener('touchstart', clickHandler);
-    }
-    
-    // Stop tutorial audio and clean up
+    // No-op stub — tutorial audio removed
     stopTutorialAudio() {
-        if (this.tutorialAudio) {
-            this.tutorialAudio.pause();
-            this.tutorialAudio.currentTime = 0;
-            this.tutorialAudio = null;
-        }
-        
-        this.hideCaptions();
-        this.captions = [];
-        this.currentCaptionIndex = 0;
-        this.captionStartTime = null;
-        this.audioStarted = false;
-        
-        // Show AI assistant again
         if (this.aiAssistant) {
             this.aiAssistant.style.display = 'block';
         }
@@ -3104,11 +2811,6 @@ class DigitalMirror {
             this.resetCountdownTimer = null;
         }
         
-        if (this.captionTimer) {
-            clearTimeout(this.captionTimer);
-            this.captionTimer = null;
-        }
-        
         // Reset all state variables
         this.smileLevel = 0;
         this.humanityPercentage = 100;
@@ -3116,7 +2818,6 @@ class DigitalMirror {
         this.isProcessing = false;
         this.isAnalyzing = false;
         this.isListening = false;
-        this.audioStarted = false;
         this.capturedFaceImages = [];
         
         // Reset smoothed metrics

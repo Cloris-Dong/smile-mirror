@@ -96,7 +96,7 @@ export class GameUI {
                 justify-content: center;
                 align-items: center;
                 color: #fff;
-                font-family: 'Courier New', 'Monaco', monospace;
+                font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, sans-serif;
                 padding: 60px 32px;
                 text-align: center;
             ">
@@ -104,13 +104,13 @@ export class GameUI {
                     display: flex;
                     flex-direction: column;
                     max-width: min(720px, 82vw);
-                    text-transform: uppercase;
                     align-items: center;
                     animation: introBlockScale 8s ease-out forwards;
                 ">
                     <div style="
-                        font-size: clamp(16px, 3vw, 24px);
-                        letter-spacing: 0.24em;
+                        font-size: clamp(20px, 3.4vw, 28px);
+                        font-weight: 550;
+                        letter-spacing: 0.18em;
                         line-height: 1.8;
                         text-align: left;
                         white-space: pre-line;
@@ -281,7 +281,8 @@ export class GameUI {
                 <div data-role="scenario-prompt" style="
                     font-size: 26px;
                     line-height: 1.55;
-                    font-weight: 600;
+                    font-weight: 700;
+                    letter-spacing: 0.01em;
                     color: rgba(255, 255, 255, 0.96);
                 ">
                     ${scenario.promptText}
@@ -1513,6 +1514,10 @@ export class GameUI {
                 clearTimeout(this.scenarioRevealTimeout);
                 this.scenarioRevealTimeout = null;
             }
+
+            // Reset frame metrics so the travelling dot stays hidden until
+            // positionObservationFrame() is called for the new scenario card
+            this.observationFrameMetrics = null;
             
             // Render immediately
             this.container.innerHTML = html;

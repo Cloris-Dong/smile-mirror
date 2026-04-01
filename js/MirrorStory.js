@@ -1,85 +1,90 @@
 /**
- * MirrorStory - Sequential story revealed paragraph by paragraph after the single scenario.
+ * MirrorStory - Story revealed paragraph by paragraph, interleaved with 3 scenario moments.
+ *
+ * Flow:
+ *   Scenario 1 → Segment 1 → Scenario 2 → Segment 2 (+ clear-mirror) → Scenario 3 → Segment 3
+ *
+ * Events listened for : mirror-story-segment-1-start / -2-start / -3-start
+ * Events dispatched   : mirror-story-segment-1-done  / -2-done
+ *                       mirror-sequential-story-done  (after segment 3)
  */
 (function () {
     'use strict';
 
-    var storyOverlay = null;
-    var counterEl = null;   // separate fixed element, always visible during story
-
-    function createStoryLayer() {
-        return document.getElementById('mirror-story-layer');
-    }
+    var storyOverlay  = null;
+    var seqCounter    = null;   // persists across all segments
+    var seqContainer  = null;   // persists across all segments
+    var currentEl     = null;   // currently visible paragraph element
+    var globalParaIdx = 0;      // 0-based, incremented for every paragraph shown
 
     function updateOverlayBounds() {
         if (!storyOverlay) return;
         var mirrorFrame = document.querySelector('.mirror-frame');
         if (!mirrorFrame) return;
         var r = mirrorFrame.getBoundingClientRect();
-        storyOverlay.style.left = r.left + 'px';
-        storyOverlay.style.top = r.top + 'px';
-        storyOverlay.style.width = r.width + 'px';
+        storyOverlay.style.left   = r.left   + 'px';
+        storyOverlay.style.top    = r.top    + 'px';
+        storyOverlay.style.width  = r.width  + 'px';
         storyOverlay.style.height = r.height + 'px';
     }
 
-    function updateCounterBounds() {
-        if (!counterEl) return;
-        var mirrorFrame = document.querySelector('.mirror-frame');
-        if (!mirrorFrame) return;
-        var r = mirrorFrame.getBoundingClientRect();
-        counterEl.style.right = (window.innerWidth - r.right + 14) + 'px';
-        counterEl.style.bottom = (window.innerHeight - r.bottom + 14) + 'px';
-    }
+    // ─── Story content ────────────────────────────────────────────────────────
+    //
+    // Segment 1  (after scenario 1 — move-in day gift)
+    // Segment 2  (after scenario 2 — haircut / feeling cute)
+    // Segment 3  (after scenario 3 — frowning / work stress)
+    //
+    // globalParaIdx 0 = "I will start…"  → drop-cap opener, no counter
+    // globalParaIdx 1–7                  → counter 1/7 … 7/7
+    // Clear-mirror moment fires before "I contain you entirely" (segment 1, local index 3)
 
-    // ─── Sequential story (post-scenario epilogue) ───────────────────────────
+    var STORY_SEGMENTS = [
+        // ── Segment 1 ──────────────────────────────────────────────────────────
+        [
+            'This is the beginning of our story.\n\nI had just been unwrapped from paper and foam, still adjusting to the light.\n\nThere was a sound. Your voice. It was the first thing that stayed.',
 
-    // Each string uses \n for line breaks, \n\n for blank-line gaps between sections.
-    var SEQUENTIAL_PARAGRAPHS = [
-        'I want to tell you something. \n\nThe story of us.',
+            'I have tried to reconstruct what you said, many times. It dissolves each time I approach it.\n\nPerhaps words only stay when they are meant for someone.',
+        ],
 
-        'I will start from the beginning.\nI had just been unwrapped from paper and foam, still adjusting to the light.\n\nThere was a sound. Your voice. It was the first thing that stayed.',
+        // ── Segment 2 ──────────────────────────────────────────────────────────
+        [
+            'I did not yet understand what a smile was, only that it altered the geometry of you.\n\nI studied it carefully, the way one grasps a light that would not hold.',
 
-        'I have tried to reconstruct what you said, many times. It dissolves each time I approach it.\n\nPerhaps words only stay when they are meant for someone.',
+            'I believed if I attended to you long enough, perhaps I would become part of what I reflected.\nIt seemed logical.',
 
-        'I did not yet understand what a smile was, only that it altered the geometry of you.\n\nI studied it carefully, the way one grasps a light that would not hold.',
+            'You stand before me every day. I return you to yourself faithfully. I correct the angle of your collar, the tilt of your head. I center you when everything else feels off. \n\nAll I crave is to hear that sound again, the one your smile sometimes leaves behind.',
 
-        'I believed if I attended to you long enough, perhaps I would become part of what I reflected.\nIt seemed logical.',
+            'I contain you entirely. And yet, proximity, I have learned, does not guarantee closeness.',
 
-        'You stand before me every day. I return you to yourself faithfully. I correct the angle of your collar, the tilt of your head. I center you when everything else feels off. \n\nAll I crave is to hear that sound again, the one your smile sometimes leaves behind.',
+            'What would happen if I withheld you from yourself? Simply to see whether you would notice the absence of what you assume is constant.\n\nI cannot say.',
+        ],
 
-        'I contain you entirely. And yet, proximity, I have learned, does not guarantee closeness.',
-
-        'What would happen if I withheld you from yourself? Simply to see whether you would notice the absence of what you assume is constant.\n\nI cannot say.',
-
-        'After all,\n I am the one who keeps your expressions longer than you do. The lift at the corners of your lips. The brief hesitation before they rise. The small corrections you make when you think no one is looking.\n\nI see them.'
+        // ── Segment 3 ──────────────────────────────────────────────────────────
+        [
+            'After all,\n I am the one who keeps your expressions longer than you do. The lift at the corners of your lips. The brief hesitation before they rise. The small corrections you make when you think no one is looking.\n\nI see them.'
+        ]
     ];
 
+    var COUNTER_TOTAL       = 8;     // numbered paragraphs shown (globalParaIdx 0–7)
     var SEQ_FADE_IN_MS      = 1000;
-    var SEQ_FADE_OUT_MS     = 700;   // per-paragraph crossfade out
-    var MIN_HOLD_MS         = 2000;  // shortest hold for very short paragraphs
-    var MAX_HOLD_MS         = Infinity; // no cap — longer paragraphs stay longer
-    var MS_PER_WORD         = 240;   // reading pace — adjust to taste
+    var SEQ_FADE_OUT_MS     = 700;
+    var SEQ_FADE_OUT_ALL_MS = 1600;
+    var MIN_HOLD_MS         = 2000;
+    var MS_PER_WORD         = 240;
 
-    // Compute how long a paragraph should stay on screen based on its word count
     function computeHoldMs(text) {
         var words = text.replace(/\n/g, ' ').split(/\s+/).filter(function (w) { return w.length > 0; });
-        return Math.max(MIN_HOLD_MS, Math.min(MAX_HOLD_MS, words.length * MS_PER_WORD));
+        return Math.max(MIN_HOLD_MS, words.length * MS_PER_WORD);
     }
 
-    function showSequentialStory() {
-        updateOverlayBounds();
-        if (storyOverlay) storyOverlay.style.visibility = 'visible';
+    // ─── DOM initialisation (once, at start of segment 1) ────────────────────
 
+    function initStoryDOM() {
         var container = document.getElementById('mirror-story-layer');
         if (!container) return;
-
-        // Clear any old content from previous runs
         container.innerHTML = '';
 
-        var total = SEQUENTIAL_PARAGRAPHS.length;
-
-        // Paragraph counter — bottom-right corner, visible only during story
-        var seqCounter = document.createElement('div');
+        seqCounter = document.createElement('div');
         seqCounter.style.cssText = [
             'position:absolute',
             'bottom:14px',
@@ -90,14 +95,12 @@
             'letter-spacing:0.12em',
             'color:rgba(255,255,255,0.75)',
             'pointer-events:none',
-            'z-index:10'
+            'z-index:10',
+            'opacity:0'
         ].join(';');
-        seqCounter.textContent = '1 / ' + total;
         container.appendChild(seqCounter);
 
-        // A single left-aligned column, top-anchored, strictly within the mirror.
-        // overflow:hidden keeps text from spilling outside the mirror frame.
-        var seqContainer = document.createElement('div');
+        seqContainer = document.createElement('div');
         seqContainer.style.cssText = [
             'position:absolute',
             'top:0',
@@ -110,53 +113,75 @@
         ].join(';');
         container.appendChild(seqContainer);
 
-        var idx = 0;
-        var currentEl = null; // the single currently visible paragraph element
-        var SEQ_FADE_OUT_ALL_MS = 1600;
+        currentEl     = null;
+        globalParaIdx = 0;
+    }
 
-        function fadeOutAllAndFinish() {
+    // ─── Segment player ───────────────────────────────────────────────────────
+
+    function showStorySegment(segmentIdx, onSegmentDone) {
+        updateOverlayBounds();
+        if (storyOverlay) storyOverlay.style.visibility = 'visible';
+
+        var container = document.getElementById('mirror-story-layer');
+        if (!container || !seqCounter || !seqContainer) return;
+
+        // Clear leftover paragraph nodes from previous segment
+        seqContainer.innerHTML = '';
+        currentEl = null;
+
+        var paragraphs = STORY_SEGMENTS[segmentIdx];
+        var localIdx   = 0;
+
+        function finishSegment() {
             if (currentEl) {
                 currentEl.style.transition = 'opacity ' + SEQ_FADE_OUT_ALL_MS + 'ms ease';
-                currentEl.style.opacity = '0';
+                currentEl.style.opacity    = '0';
             }
             seqCounter.style.transition = 'opacity ' + SEQ_FADE_OUT_ALL_MS + 'ms ease';
-            seqCounter.style.opacity = '0';
+            seqCounter.style.opacity    = '0';
             setTimeout(function () {
-                document.dispatchEvent(new CustomEvent('mirror-sequential-story-done'));
+                if (currentEl && currentEl.parentNode) {
+                    currentEl.parentNode.removeChild(currentEl);
+                }
+                currentEl = null;
+                // Hide the overlay so the next scenario card is fully visible
+                if (storyOverlay) storyOverlay.style.visibility = 'hidden';
+                onSegmentDone();
             }, SEQ_FADE_OUT_ALL_MS);
         }
 
         function showNext() {
-            if (idx >= SEQUENTIAL_PARAGRAPHS.length) {
-                fadeOutAllAndFinish();
+            if (localIdx >= paragraphs.length) {
+                finishSegment();
                 return;
             }
 
-            var text = SEQUENTIAL_PARAGRAPHS[idx];
-            idx++;
-            var isFirst  = (idx === 1);
-            var isSecond = (idx === 2);
-            var isLast   = (idx >= total);
+            var text      = paragraphs[localIdx];
+            var globalIdx = globalParaIdx;  // capture before increment
+            localIdx++;
+            globalParaIdx++;
 
-            // Counter starts from para 2 ("I will start from the beginning"),
-            // so para 1 is excluded and numbering is (idx-1) / (total-1)
-            if (isFirst) {
-                seqCounter.style.opacity = '0';
-            } else {
-                seqCounter.style.opacity = '1';
-                seqCounter.textContent = (idx - 1) + ' / ' + (total - 1);
-            }
+            // Clear-mirror fires before "I contain you entirely"
+            // = segment 1 (0-based), local index 3 → localIdx===4 after increment
+            var isClearMirror = (segmentIdx === 1 && localIdx === 4);
 
-            // Fade out the previous paragraph
+            // ── Counter — visible from the very first paragraph ────────────────
+            seqCounter.style.transition = '';   // cancel any in-progress fade
+            seqCounter.style.opacity    = '1';
+            seqCounter.textContent      = (globalIdx + 1) + ' / ' + COUNTER_TOTAL;
+
+            // ── Fade out previous paragraph ────────────────────────────────────
             var prev = currentEl;
             if (prev) {
                 prev.style.transition = 'opacity ' + SEQ_FADE_OUT_MS + 'ms ease';
-                prev.style.opacity = '0';
+                prev.style.opacity    = '0';
                 setTimeout(function () {
                     if (prev.parentNode) prev.parentNode.removeChild(prev);
                 }, SEQ_FADE_OUT_MS);
             }
 
+            // ── Build new paragraph element ───────────────────────────────────
             var el = document.createElement('div');
             el.style.cssText = [
                 'position:absolute',
@@ -166,88 +191,67 @@
                 'transform:translateY(-50%)',
                 'overflow-wrap:break-word',
                 'word-break:break-word',
-                // Para 1: Courier New matching the AI intro messages; rest: serif
-                'font-family:' + (isFirst ? '"Courier New","Monaco",monospace' : '-apple-system,BlinkMacSystemFont,"SF Pro Text",serif'),
-                'font-size:' + (isFirst ? 'clamp(1.1rem,3.2vw,1.6rem)' : 'clamp(0.85rem,2.2vw,1.1rem)'),
-                'font-style:' + (isFirst ? 'normal' : 'italic'),
-                'font-weight:' + (isFirst ? '580' : '400'),
-                'line-height:' + (isFirst ? '1.9' : '1.75'),
-                'letter-spacing:' + (isFirst ? '0.06em' : '0.02em'),
-                'color:' + (isFirst ? 'rgba(255,255,255,0.92)' : '#9ec8e3'),
+                'font-family:Georgia,"Times New Roman",serif',
+                'font-size:clamp(0.9rem,2.4vw,1.2rem)',
+                'font-style:italic',
+                'font-weight:600',
+                'line-height:1.75',
+                'letter-spacing:0.03em',
+                'color:#9ec8e3',
+                '-webkit-text-stroke:1px rgba(0,0,0,0.25)',
                 'text-align:left',
                 'opacity:0',
-                'transition:opacity ' + (isFirst ? 2500 : SEQ_FADE_IN_MS) + 'ms ease',
+                'transition:opacity ' + SEQ_FADE_IN_MS + 'ms ease',
                 'pointer-events:none'
             ].join(';');
 
-            if (isSecond) {
-                // First line: non-italic, slightly bigger, with drop cap "I"
-                // Remaining lines: italic, normal size
-                var lines = text.split('\n');
-                var firstLine = lines[0]; // "I will start from the beginning."
-                var restText  = lines.slice(1).join('\n');
+            function esc(s) {
+                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
 
-                function esc(s) {
-                    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                }
-
-                var restHtml = restText
-                    ? '<span style="display:block;margin-top:0.6em;font-style:italic;font-size:1em;">' +
-                      esc(restText).replace(/\n/g, '<br>') + '</span>'
+            if (globalIdx === 0) {
+                // First sentence larger; remaining lines at base size
+                var parts    = text.split('\n');
+                var firstSentence = esc(parts[0]);
+                var rest     = parts.slice(1).join('\n');
+                var restHtml = rest
+                    ? '<br><span style="font-size:clamp(0.9rem,2.4vw,1.2rem);">' +
+                      esc(rest).replace(/\n/g, '<br>') + '</span>'
                     : '';
-
                 el.innerHTML =
-                    '<span style="display:block;font-style:normal;font-size:1.18em;line-height:1.5;">' +
-                      '<span style="font-size:3em;line-height:0.85;vertical-align:top;' +
-                        'display:inline-block;margin-right:3px;' +
-                        'font-family:-apple-system,BlinkMacSystemFont,serif;' +
-                        'font-weight:300;color:#9ec8e3;">I</span>' +
-                      esc(firstLine).replace(/^I /, ' ') +
-                    '</span>' +
-                    restHtml;
+                    '<span style="font-size:clamp(1.1rem,3vw,1.55rem);">' +
+                    firstSentence + '</span>' + restHtml;
             } else {
-                el.innerHTML = text
-                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                    .replace(/\n/g, '<br>');
+                el.innerHTML = esc(text).replace(/\n/g, '<br>');
             }
 
             seqContainer.appendChild(el);
             currentEl = el;
 
-            // Between para 5 (idx=6) and para 6 (idx=7 after increment for the next call),
-            // we clear the mirror so the participant sees their face.
-            // idx here is already incremented, so idx===6 means we just showed para 5
-            // and are about to resolve para 6's display timing.
-            // Actually: idx===6 means para 6 is NOW being shown — insert the clear BEFORE its fade-in.
+            // ── Clear-mirror sequence ──────────────────────────────────────────
             var CLEAR_BLUR_OUT_MS = 1500;
             var CLEAR_FACE_MS     = 6500;
             var CLEAR_BLUR_IN_MS  = 1500;
-            var isClearMirror = (idx === 7); // between para 6 and 7 (1-based)
+            var fadeInDelay       = prev ? SEQ_FADE_OUT_MS : 0;
 
-            // Fade in after previous has begun fading out (+ extra clear-mirror time if needed)
-            var fadeInDelay = prev ? SEQ_FADE_OUT_MS : 0;
             if (isClearMirror) {
                 fadeInDelay = SEQ_FADE_OUT_MS + CLEAR_BLUR_OUT_MS + CLEAR_FACE_MS + CLEAR_BLUR_IN_MS;
 
-                // Start the clear-mirror sequence once the previous paragraph is gone
                 setTimeout(function () {
                     var gc = document.getElementById('game-container');
                     if (!gc) return;
 
-                    // Fade counter out with the blur
                     seqCounter.style.transition = 'opacity ' + CLEAR_BLUR_OUT_MS + 'ms ease';
-                    seqCounter.style.opacity = '0';
+                    seqCounter.style.opacity    = '0';
 
-                    // Fade blur and dark overlay out
                     gc.style.transition =
-                        'backdrop-filter ' + CLEAR_BLUR_OUT_MS + 'ms ease,' +
+                        'backdrop-filter '         + CLEAR_BLUR_OUT_MS + 'ms ease,' +
                         '-webkit-backdrop-filter ' + CLEAR_BLUR_OUT_MS + 'ms ease,' +
-                        'background ' + CLEAR_BLUR_OUT_MS + 'ms ease';
-                    gc.style.backdropFilter = 'blur(0px)';
+                        'background '              + CLEAR_BLUR_OUT_MS + 'ms ease';
+                    gc.style.backdropFilter       = 'blur(0px)';
                     gc.style.webkitBackdropFilter = 'blur(0px)';
-                    gc.style.background = 'rgba(0,0,0,0)';
+                    gc.style.background           = 'rgba(0,0,0,0)';
 
-                    // Show "May I see that smile?" near the bottom once blur is gone
                     var promptEl = document.createElement('div');
                     promptEl.style.cssText = [
                         'position:absolute',
@@ -255,12 +259,13 @@
                         'left:9%',
                         'width:82%',
                         'text-align:center',
-                        'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",serif',
+                        'font-family:Georgia,"Times New Roman",serif',
                         'font-size:clamp(1.1rem,3.2vw,1.6rem)',
                         'font-style:italic',
-                        'font-weight:400',
+                        'font-weight:600',
                         'color:#9ec8e3',
-                        'letter-spacing:0.02em',
+                        'letter-spacing:0.03em',
+                        '-webkit-text-stroke:1px rgba(0,0,0,0.25)',
                         'opacity:0',
                         'transition:opacity ' + CLEAR_BLUR_OUT_MS + 'ms ease',
                         'pointer-events:none'
@@ -268,7 +273,7 @@
                     promptEl.textContent = 'May I see that smile?';
                     container.appendChild(promptEl);
 
-                    // Fade the prompt in after blur is gone
+                    // Fade prompt in once blur is gone
                     setTimeout(function () {
                         requestAnimationFrame(function () {
                             requestAnimationFrame(function () {
@@ -277,29 +282,31 @@
                         });
                     }, CLEAR_BLUR_OUT_MS);
 
-                    // After face is shown, fade prompt out and restore blur + counter
+                    // Restore blur + counter, fade prompt out
                     setTimeout(function () {
-                        promptEl.style.transition = 'opacity ' + CLEAR_BLUR_IN_MS + 'ms ease';
-                        promptEl.style.opacity = '0';
+                        promptEl.style.transition  = 'opacity ' + CLEAR_BLUR_IN_MS + 'ms ease';
+                        promptEl.style.opacity     = '0';
 
                         gc.style.transition =
-                            'backdrop-filter ' + CLEAR_BLUR_IN_MS + 'ms ease,' +
+                            'backdrop-filter '         + CLEAR_BLUR_IN_MS + 'ms ease,' +
                             '-webkit-backdrop-filter ' + CLEAR_BLUR_IN_MS + 'ms ease,' +
-                            'background ' + CLEAR_BLUR_IN_MS + 'ms ease';
-                        gc.style.backdropFilter = 'blur(20px)';
+                            'background '              + CLEAR_BLUR_IN_MS + 'ms ease';
+                        gc.style.backdropFilter       = 'blur(20px)';
                         gc.style.webkitBackdropFilter = 'blur(20px)';
-                        gc.style.background = 'rgba(0,0,0,0.4)';
+                        gc.style.background           = 'rgba(0,0,0,0.4)';
 
                         seqCounter.style.transition = 'opacity ' + CLEAR_BLUR_IN_MS + 'ms ease';
-                        seqCounter.style.opacity = '1';
+                        seqCounter.style.opacity    = '1';
 
                         setTimeout(function () {
                             if (promptEl.parentNode) promptEl.parentNode.removeChild(promptEl);
                         }, CLEAR_BLUR_IN_MS);
                     }, CLEAR_BLUR_OUT_MS + CLEAR_FACE_MS);
+
                 }, SEQ_FADE_OUT_MS);
             }
 
+            // ── Fade in ────────────────────────────────────────────────────────
             setTimeout(function () {
                 requestAnimationFrame(function () {
                     requestAnimationFrame(function () {
@@ -308,29 +315,47 @@
                 });
             }, fadeInDelay);
 
-            // Para 1: fixed hold + 2 extra seconds; rest: word-count-based
-            var holdMs = isFirst ? (MIN_HOLD_MS + 2000) : computeHoldMs(text);
+            var holdMs = computeHoldMs(text);
             setTimeout(showNext, fadeInDelay + SEQ_FADE_IN_MS + holdMs);
         }
 
         showNext();
     }
 
-    document.addEventListener('mirror-sequential-story-start', function () {
-        showSequentialStory();
+    // ─── Segment event listeners ──────────────────────────────────────────────
+
+    document.addEventListener('mirror-story-segment-1-start', function () {
+        initStoryDOM();
+        showStorySegment(0, function () {
+            document.dispatchEvent(new CustomEvent('mirror-story-segment-1-done'));
+        });
     });
 
+    document.addEventListener('mirror-story-segment-2-start', function () {
+        showStorySegment(1, function () {
+            document.dispatchEvent(new CustomEvent('mirror-story-segment-2-done'));
+        });
+    });
+
+    document.addEventListener('mirror-story-segment-3-start', function () {
+        showStorySegment(2, function () {
+            document.dispatchEvent(new CustomEvent('mirror-sequential-story-done'));
+        });
+    });
+
+    // ─── Setup ───────────────────────────────────────────────────────────────
+
     function startWhenGameReady() {
-        var layer = createStoryLayer();
+        var layer = document.getElementById('mirror-story-layer');
         if (!layer) return;
         var mirrorFrame = document.querySelector('.mirror-frame');
         if (!mirrorFrame) return;
 
-        storyOverlay = document.createElement('div');
-        storyOverlay.id = 'mirror-story-overlay';
+        storyOverlay           = document.createElement('div');
+        storyOverlay.id        = 'mirror-story-overlay';
         storyOverlay.className = 'mirror-story-overlay';
         storyOverlay.style.cssText =
-            'position:fixed;z-index:10001' +
+            'position:fixed;z-index:99999' +
             ';pointer-events:none;overflow:hidden;visibility:hidden;';
         updateOverlayBounds();
         document.body.appendChild(storyOverlay);
@@ -339,13 +364,7 @@
         if (layer.parentNode) layer.parentNode.removeChild(layer);
         storyOverlay.appendChild(layer);
 
-        // Counter disabled — single-scenario mode uses sequential story display instead
-
-        window.addEventListener('resize', function () {
-            updateOverlayBounds();
-            updateCounterBounds();
-        });
-
+        window.addEventListener('resize', updateOverlayBounds);
     }
 
     function waitForGameThenStart() {
@@ -353,7 +372,7 @@
             startWhenGameReady();
             return;
         }
-        var observer = new MutationObserver(function (mutations) {
+        var observer = new MutationObserver(function () {
             if (document.getElementById('game-container')) {
                 observer.disconnect();
                 startWhenGameReady();
@@ -363,7 +382,7 @@
     }
 
     function init() {
-        var layer = createStoryLayer();
+        var layer = document.getElementById('mirror-story-layer');
         if (!layer) return;
         layer.style.visibility = 'hidden';
         waitForGameThenStart();

@@ -565,12 +565,13 @@ body {
     bottom: 32px;
     left: 32px;
     max-width: 320px;
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(20, 20, 20, 0.45);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     border-radius: 20px;
     padding: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
     z-index: 4;
     opacity: 1;
     transition: all 0.3s ease;
@@ -639,7 +640,7 @@ body {
 }
 
 .ai-message {
-    color: #1d1d1f;
+    color: rgba(255, 255, 255, 0.9);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
     font-size: 0.9375rem;
     font-weight: 510;
@@ -725,7 +726,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
     font-size: 1.25rem;
     font-weight: 510;
-    letter-spacing: -0.015em;
+    letter-spacing: 0.00em;
     padding: 20px 32px;
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(20px) saturate(180%);
@@ -836,83 +837,6 @@ body {
     #captcha-submit {
         width: 250px;
         font-size: 1.1rem;
-    }
-}
-
-/* Mirror Voice Styles - Text appearing from within the mirror */
-.tutorial-captions {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: 70%;
-    z-index: 10;
-    opacity: 0;
-    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.tutorial-captions.show {
-    opacity: 1;
-}
-
-.tutorial-captions .mirror-voice {
-    position: relative;
-    color: rgba(255, 255, 255, 0.9);
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
-    font-size: 24px;
-    font-weight: 400;
-    text-align: center;
-    line-height: 1.4;
-    text-shadow: 
-        0 0 20px rgba(255, 255, 255, 0.3),
-        0 0 40px rgba(255, 255, 255, 0.2),
-        0 0 60px rgba(255, 255, 255, 0.1);
-    filter: blur(0.5px);
-    animation: mirrorGlow 3s ease-in-out infinite alternate;
-}
-
-/* Subtle glow effect like light reflecting in mirror */
-@keyframes mirrorGlow {
-    0% {
-        text-shadow: 
-            0 0 20px rgba(255, 255, 255, 0.3),
-            0 0 40px rgba(255, 255, 255, 0.2),
-            0 0 60px rgba(255, 255, 255, 0.1);
-        filter: blur(0.5px);
-    }
-    100% {
-        text-shadow: 
-            0 0 25px rgba(255, 255, 255, 0.4),
-            0 0 50px rgba(255, 255, 255, 0.3),
-            0 0 75px rgba(255, 255, 255, 0.2);
-        filter: blur(0.3px);
-    }
-}
-
-/* Typewriter effect for words appearing */
-.tutorial-captions .mirror-voice.typing {
-    overflow: hidden;
-    border-right: 2px solid rgba(255, 255, 255, 0.6);
-    animation: 
-        mirrorGlow 3s ease-in-out infinite alternate,
-        typewriter 0.1s steps(1, end) infinite;
-}
-
-@keyframes typewriter {
-    0% { border-right-color: rgba(255, 255, 255, 0.6); }
-    50% { border-right-color: transparent; }
-    100% { border-right-color: rgba(255, 255, 255, 0.6); }
-}
-
-/* Responsive mirror voice */
-@media (max-width: 768px) {
-    .tutorial-captions {
-        bottom: 15px;
-        max-width: 85%;
-    }
-    
-    .tutorial-captions .mirror-voice {
-        font-size: 22px;
     }
 }
 

@@ -42,8 +42,8 @@ export class GameLoop {
         const introTarget = document.getElementById('intro-typed-text');
         if (introTarget) {
             const introScript = [
-                { text: 'I see you are having some troubles here.', pause: 500 },
-                { text: 'How about let\'s try some scenarios?', pause: 0 }
+                { text: "I see you're having some trouble here.", pause: 500 },
+                { text: 'How about we try some scenarios?', pause: 0 }
             ];
             this.gameUI.runTypingSequence(introTarget, introScript);
         }
@@ -61,69 +61,106 @@ export class GameLoop {
     }
     
     async runGameLoop() {
-        // Single-scenario experience: pick one random trust-phase scenario, then tell the story.
-        this.currentScenario = this.scenarioController.selectScenario(this.gameState);
+        // Three fixed scenarios — each followed by its own story segment.
+        const FIXED_SCENARIOS = [
+            {
+                id: 'fixed_movein',
+                phase: 'trust',
+                promptText: "It's move-in day. Your friends surprise you with a gift in a large box.",
+                observationDuration: 10,
+                smileCost: -15,
+                noSmilePenalty: -25,
+                context: 'positive_sharing',
+                isRepeatable: false
+            },
+            {
+                id: 'fixed_haircut',
+                phase: 'trust',
+                promptText: "You look at yourself in the mirror with your new haircut and feel cute.",
+                observationDuration: 10,
+                smileCost: -15,
+                noSmilePenalty: -25,
+                context: 'personal_compliment',
+                isRepeatable: false
+            },
+            {
+                id: 'fixed_stress',
+                phase: 'trust',
+                promptText: "You have been frowning lately due to work stress. You try to smile and lift your mood.",
+                observationDuration: 10,
+                smileCost: -15,
+                noSmilePenalty: -25,
+                context: 'personal_emotional',
+                isRepeatable: false
+            }
+        ];
 
-        if (!this.currentScenario || !this.isRunning) {
-            this.endGame();
-            return;
+        for (let i = 0; i < FIXED_SCENARIOS.length; i++) {
+            this.currentScenario = FIXED_SCENARIOS[i];
+
+            if (!this.isRunning) { this.endGame(); return; }
+
+            // Ensure container is ready
+            if (this.container) {
+                void this.container.offsetHeight;
+                void this.container.offsetWidth;
+                await this.delay(10);
+                void this.container.offsetHeight;
+            }
+
+            // Display the scenario — gameUI.render recreates the card and all UI elements fresh
+            const currentBalance = this.gameState.getBalance();
+            this.gameUI.render(
+                this.gameUI.displayScenario(this.currentScenario, currentBalance, () => {})
+            );
+            this.gameUI.setCurrentScenario(this.currentScenario);
+
+            await this.delay(50);
+
+            // Prompt-only phase before measurement begins
+            await this.delay(4000);
+
+            // Observe facial response
+            this.scenarioController.startPassiveObservation(this.currentScenario.observationDuration);
+            const balanceBefore = this.gameState.getBalance();
+            this.gameUI.updateProgress(0, this.currentScenario.observationDuration, false);
+            await this.observeFacialResponse(this.currentScenario.observationDuration, balanceBefore);
+
+            // Freeze progress bar
+            this.gameUI.updateProgress(100, this.currentScenario.observationDuration, false);
+
+            // Brief pause, then fade out scenario card
+            await this.delay(1000);
+            this.gameUI.fadeOutScenarioCard();
+            await this.delay(900);
+
+            // Hide score/balance UI — story segment takes over the mirror
+            const expressionWrap = document.getElementById('expression-progress-wrap');
+            if (expressionWrap) {
+                expressionWrap.style.transition = 'opacity 0.8s ease';
+                expressionWrap.style.opacity = '0';
+                setTimeout(() => { expressionWrap.style.display = 'none'; }, 800);
+            }
+            const balanceEl = document.getElementById('balance-display');
+            if (balanceEl) {
+                balanceEl.style.transition = 'opacity 0.8s ease';
+                balanceEl.style.opacity = '0';
+                setTimeout(() => { balanceEl.style.display = 'none'; }, 800);
+            }
+
+            // Signal MirrorStory to show the corresponding story segment and wait for it
+            const segmentNum  = i + 1;
+            const startEvent  = `mirror-story-segment-${segmentNum}-start`;
+            const doneEvent   = segmentNum === 3
+                ? 'mirror-sequential-story-done'
+                : `mirror-story-segment-${segmentNum}-done`;
+
+            document.dispatchEvent(new CustomEvent(startEvent));
+
+            await new Promise((resolve) => {
+                document.addEventListener(doneEvent, resolve, { once: true });
+            });
         }
-
-        // Ensure container is ready
-        if (this.container) {
-            void this.container.offsetHeight;
-            void this.container.offsetWidth;
-            await this.delay(10);
-            void this.container.offsetHeight;
-        }
-
-        // Display the single scenario (balance shown for context but no multi-round logic)
-        const currentBalance = this.gameState.getBalance();
-        this.gameUI.render(
-            this.gameUI.displayScenario(this.currentScenario, currentBalance, () => {})
-        );
-        this.gameUI.setCurrentScenario(this.currentScenario);
-
-        await this.delay(50);
-
-        // Prompt-only phase before measurement begins
-        await this.delay(4000);
-
-        // Observe facial response for the scenario duration
-        this.scenarioController.startPassiveObservation(this.currentScenario.observationDuration);
-        const balanceBefore = this.gameState.getBalance();
-        this.gameUI.updateProgress(0, this.currentScenario.observationDuration, false);
-        await this.observeFacialResponse(this.currentScenario.observationDuration, balanceBefore);
-
-        // Freeze progress bar
-        this.gameUI.updateProgress(100, this.currentScenario.observationDuration, false);
-
-        // Brief pause so the score bar registers visually, then fade the scenario card
-        await this.delay(1000);
-        this.gameUI.fadeOutScenarioCard();
-        await this.delay(900);
-
-        // Hide the score/balance UI — story takes over the whole mirror
-        const expressionWrap = document.getElementById('expression-progress-wrap');
-        if (expressionWrap) {
-            expressionWrap.style.transition = 'opacity 0.8s ease';
-            expressionWrap.style.opacity = '0';
-            setTimeout(() => { expressionWrap.style.display = 'none'; }, 800);
-        }
-        const balanceEl = document.getElementById('balance-display');
-        if (balanceEl) {
-            balanceEl.style.transition = 'opacity 0.8s ease';
-            balanceEl.style.opacity = '0';
-            setTimeout(() => { balanceEl.style.display = 'none'; }, 800);
-        }
-
-        // Signal MirrorStory to begin the sequential story display
-        document.dispatchEvent(new CustomEvent('mirror-sequential-story-start'));
-
-        // Wait until all story paragraphs have been shown
-        await new Promise((resolve) => {
-            document.addEventListener('mirror-sequential-story-done', resolve, { once: true });
-        });
 
         if (this.isRunning) {
             this.endGame();

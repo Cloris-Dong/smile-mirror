@@ -53,13 +53,6 @@ export const CONFIG = {
         MAX_RETRIES: 5
     },
     
-    // Tutorial audio
-    TUTORIAL: {
-        AUDIO_FILE: 'Trial0_mixdown.mp3',
-        TIMING_FILE: 'timing.json',
-        TYPEWRITER_DELAY: 50  // ms per character
-    },
-    
     // Webcam settings
     WEBCAM: {
         IDEAL_WIDTH: 720,
