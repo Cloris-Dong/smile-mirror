@@ -86,7 +86,7 @@ export class GameLoop {
             {
                 id: 'fixed_stress',
                 phase: 'trust',
-                promptText: "You have been frowning lately due to work stress. You try to smile and lift your mood.",
+                promptText: "You have been frowning lately due to work stress. A smile would lift your mood.",
                 observationDuration: 10,
                 smileCost: -15,
                 noSmilePenalty: -25,
@@ -107,6 +107,10 @@ export class GameLoop {
                 await this.delay(10);
                 void this.container.offsetHeight;
             }
+
+            // Ensure story overlay is hidden before the scenario card appears
+            const storyOverlay = document.getElementById('mirror-story-overlay');
+            if (storyOverlay) storyOverlay.style.visibility = 'hidden';
 
             // Display the scenario — gameUI.render recreates the card and all UI elements fresh
             const currentBalance = this.gameState.getBalance();
@@ -358,6 +362,18 @@ export class GameLoop {
                 this.mirror.webcam.style.left = '';
                 this.mirror.webcam.style.zIndex = '';
                 this.mirror.webcam.style.pointerEvents = '';
+            }
+
+            // Restore canvas overlays that were hidden during the game
+            if (this.mirror.canvas) {
+                this.mirror.canvas.style.opacity = '';
+                this.mirror.canvas.style.position = '';
+                this.mirror.canvas.style.zIndex = '';
+            }
+            if (this.mirror.facialOverlay) {
+                this.mirror.facialOverlay.style.opacity = '';
+                this.mirror.facialOverlay.style.position = '';
+                this.mirror.facialOverlay.style.zIndex = '';
             }
             
             // Reset mirror to beginning

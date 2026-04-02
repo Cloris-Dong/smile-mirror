@@ -2587,6 +2587,9 @@ class DigitalMirror {
             // Start the game
             console.log('Starting game loop...');
             await this.gameLoop.start();
+
+            // Game loop finished normally — clear the starting flag so restart can proceed
+            this.gameStarting = false;
             
         } catch (error) {
             console.error('Failed to start Emotional Economics Game:', error);

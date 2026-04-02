@@ -17,10 +17,6 @@ export class GameStateManager {
     }
     
     getCurrentPhase() {
-        // Round-based phase logic:
-        // First 2 rounds (scenariosCompleted 0-1): trust phase
-        // Next rounds (scenariosCompleted 2+): pressure phase
-        // Last round (balance <= 20): debt_spiral phase
         if (this.pointBalance <= 0) return 'game_over';
         if (this.pointBalance <= 30) return 'debt_spiral'; // Last round territory
         if (this.scenariosCompleted < 2) return 'trust'; // First 2 rounds

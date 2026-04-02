@@ -41,31 +41,37 @@
     var STORY_SEGMENTS = [
         // ── Segment 1 ──────────────────────────────────────────────────────────
         [
-            'This is the beginning of our story.\n\nI had just been unwrapped from paper and foam, still adjusting to the light.\n\nThere was a sound. Your voice. It was the first thing that stayed.',
+            'I was that gift.\n\nYou’ve just unwrapped me from paper and foam. I was still adjusting to the light.\n\nThere was a sound. Your voice.',
 
             'I have tried to reconstruct what you said, many times. It dissolves each time I approach it.\n\nPerhaps words only stay when they are meant for someone.',
         ],
 
         // ── Segment 2 ──────────────────────────────────────────────────────────
         [
-            'I did not yet understand what a smile was, only that it altered the geometry of you.\n\nI studied it carefully, the way one grasps a light that would not hold.',
+            'I did not yet understand what a smile was, only that it altered the geometry of you.\n\nI studied it carefully, the way one tries to catch light with a hand.',
 
-            'I believed if I attended to you long enough, perhaps I would become part of what I reflected.\nIt seemed logical.',
+            'I believed if I attended to you long enough, perhaps I would become a part of you.\nIt seemed logical.',
 
-            'You stand before me every day. I return you to yourself faithfully. I correct the angle of your collar, the tilt of your head. I center you when everything else feels off. \n\nAll I crave is to hear that sound again, the one your smile sometimes leaves behind.',
+            'You stand before me every day. Day in, day out. I return you to yourself faithfully.',
+            
+            'I correct the angle of your collar, the tilt of your head. I center you when everything else feels off. \n\nAll I crave is to hear that sound again, the one that slips through when you smile.',
 
             'I contain you entirely. And yet, proximity, I have learned, does not guarantee closeness.',
 
-            'What would happen if I withheld you from yourself? Simply to see whether you would notice the absence of what you assume is constant.\n\nI cannot say.',
+            'What would happen if I withheld you from yourself? Simply to see whether you would notice the absence of what you assume is constant.',
+            
+            'I cannot say.',
         ],
 
         // ── Segment 3 ──────────────────────────────────────────────────────────
         [
-            'After all,\n I am the one who keeps your expressions longer than you do. The lift at the corners of your lips. The brief hesitation before they rise. The small corrections you make when you think no one is looking.\n\nI see them.'
+            'After all,\n I am the one who remembers your expressions longer than you do. \nThe lift at the corners of your lips. The brief hesitation before they rise. The small corrections you make when you think no one is looking.',
+
+            'I see them.',
         ]
     ];
 
-    var COUNTER_TOTAL       = 8;     // numbered paragraphs shown (globalParaIdx 0–7)
+    var COUNTER_TOTAL       = 11;    // numbered paragraphs shown (globalParaIdx 0–10)
     var SEQ_FADE_IN_MS      = 1000;
     var SEQ_FADE_OUT_MS     = 700;
     var SEQ_FADE_OUT_ALL_MS = 1600;
@@ -185,7 +191,7 @@
             var el = document.createElement('div');
             el.style.cssText = [
                 'position:absolute',
-                'top:50%',
+                'top:44%',
                 'left:0',
                 'width:100%',
                 'transform:translateY(-50%)',
@@ -255,7 +261,7 @@
                     var promptEl = document.createElement('div');
                     promptEl.style.cssText = [
                         'position:absolute',
-                        'bottom:12%',
+                        'top:15%',
                         'left:9%',
                         'width:82%',
                         'text-align:center',
@@ -360,7 +366,8 @@
         updateOverlayBounds();
         document.body.appendChild(storyOverlay);
 
-        layer.style.visibility = 'visible';
+        layer.style.display    = '';  // restore from the init() display:none
+        layer.style.visibility = '';  // inherit from overlay, never override its visibility:hidden
         if (layer.parentNode) layer.parentNode.removeChild(layer);
         storyOverlay.appendChild(layer);
 
@@ -384,7 +391,9 @@
     function init() {
         var layer = document.getElementById('mirror-story-layer');
         if (!layer) return;
-        layer.style.visibility = 'hidden';
+        // Don't set an inline visibility here — the storyOverlay (parent) controls it.
+        // Keeping the layer at display:none until moved into the overlay prevents flash.
+        layer.style.display = 'none';
         waitForGameThenStart();
     }
 
