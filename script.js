@@ -3161,6 +3161,10 @@ class DigitalMirror {
         this.stopContinuousFacePresenceDetection();
         console.log('[FACE ABSENCE] Stopped continuous face detection (will restart after reset)');
         
+        // Immediately hide the story overlay — it persists outside the game container
+        const storyOverlay = document.getElementById('mirror-story-overlay');
+        if (storyOverlay) storyOverlay.style.visibility = 'hidden';
+
         // Stop game loop if running
         if (this.gameLoop) {
             this.gameLoop.stop();

@@ -225,7 +225,7 @@
                       esc(rest).replace(/\n/g, '<br>') + '</span>'
                     : '';
                 el.innerHTML =
-                    '<span style="font-size:clamp(1.1rem,3vw,1.55rem);">' +
+                    '<span style="font-size:clamp(1.1rem,3vw,1.55rem);color:#5a9fc0;">' +
                     firstSentence + '</span>' + restHtml;
             } else {
                 el.innerHTML = esc(text).replace(/\n/g, '<br>');
@@ -276,7 +276,7 @@
                         'transition:opacity ' + CLEAR_BLUR_OUT_MS + 'ms ease',
                         'pointer-events:none'
                     ].join(';');
-                    promptEl.textContent = 'May I see that smile?';
+                    promptEl.textContent = 'Stay. Stay with me.';
                     container.appendChild(promptEl);
 
                     // Fade prompt in once blur is gone

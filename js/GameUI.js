@@ -170,7 +170,7 @@ export class GameUI {
         const barHTML = `
             <div id="expression-progress-wrap" style="
                 position: absolute;
-                top: 108px;
+                top: 28px;
                 left: 50%;
                 transform: translate(-50%, 0);
                 width: min(74vw, 820px);
@@ -783,7 +783,7 @@ export class GameUI {
     
     // Display game over screen — stacked word typography, no card, no stats
     displayGameOver(finalBalance, scenariosCompleted, scenarioHistory) {
-        const words = ['WILL', 'I', 'HEAR', 'THAT', 'SOUND', 'AGAIN?'];
+        const words = ['WILL', 'I', 'HAVE', 'THAT', 'SMILE', 'AGAIN?'];
         const wordDivs = words.map((word, i) => `
             <div style="
                 font-family: 'Courier New', 'Monaco', monospace;
@@ -1592,7 +1592,7 @@ export class GameUI {
                             const gap = 48;
                             targetTop = (barRect.bottom - containerRect.top) + gap;
                         } else {
-                            targetTop = Math.max(280, containerHeight * 0.58);
+                            targetTop = Math.max(160, containerHeight * 0.38);
                         }
                         const promptWidth = Math.min(containerWidth * 0.78, 860);
                         currentHeader.style.width = `${promptWidth}px`;

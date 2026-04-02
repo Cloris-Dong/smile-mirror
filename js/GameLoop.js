@@ -42,8 +42,8 @@ export class GameLoop {
         const introTarget = document.getElementById('intro-typed-text');
         if (introTarget) {
             const introScript = [
-                { text: "I see you're having some trouble here.", pause: 500 },
-                { text: 'How about we try some scenarios?', pause: 0 }
+                { text: 'This is not a trick. I can help.', pause: 500 },
+                { text: 'Let\u2019s try some scenarios.', pause: 0 }
             ];
             this.gameUI.runTypingSequence(introTarget, introScript);
         }
@@ -86,7 +86,7 @@ export class GameLoop {
             {
                 id: 'fixed_stress',
                 phase: 'trust',
-                promptText: "You have been frowning lately due to work stress. A smile would lift your mood.",
+                promptText: "You have been frowning lately due to work stress. Try smiling to lift your mood.",
                 observationDuration: 10,
                 smileCost: -15,
                 noSmilePenalty: -25,
@@ -120,23 +120,28 @@ export class GameLoop {
             this.gameUI.setCurrentScenario(this.currentScenario);
 
             await this.delay(50);
+            if (!this.isRunning) return;
 
             // Prompt-only phase before measurement begins
             await this.delay(4000);
+            if (!this.isRunning) return;
 
             // Observe facial response
             this.scenarioController.startPassiveObservation(this.currentScenario.observationDuration);
             const balanceBefore = this.gameState.getBalance();
             this.gameUI.updateProgress(0, this.currentScenario.observationDuration, false);
             await this.observeFacialResponse(this.currentScenario.observationDuration, balanceBefore);
+            if (!this.isRunning) return;
 
             // Freeze progress bar
             this.gameUI.updateProgress(100, this.currentScenario.observationDuration, false);
 
             // Brief pause, then fade out scenario card
             await this.delay(1000);
+            if (!this.isRunning) return;
             this.gameUI.fadeOutScenarioCard();
             await this.delay(900);
+            if (!this.isRunning) return;
 
             // Hide score/balance UI — story segment takes over the mirror
             const expressionWrap = document.getElementById('expression-progress-wrap');
@@ -162,8 +167,15 @@ export class GameLoop {
             document.dispatchEvent(new CustomEvent(startEvent));
 
             await new Promise((resolve) => {
-                document.addEventListener(doneEvent, resolve, { once: true });
+                const handler = () => resolve();
+                document.addEventListener(doneEvent, handler, { once: true });
+                // If the game is stopped while waiting, resolve immediately
+                const poll = setInterval(() => {
+                    if (!this.isRunning) { clearInterval(poll); resolve(); }
+                }, 200);
+                document.addEventListener(doneEvent, () => clearInterval(poll), { once: true });
             });
+            if (!this.isRunning) return;
         }
 
         if (this.isRunning) {
@@ -383,12 +395,15 @@ export class GameLoop {
     
     stop() {
         console.log('[GAME CLEANUP] Stopping game loop...');
-        console.log('[GAME CLEANUP] Continuous face detection should continue running');
         this.isRunning = false;
         if (this.observationInterval) {
             clearInterval(this.observationInterval);
         }
         this.gameUI.clear();
+
+        // Immediately hide the story overlay so it doesn't linger after the game ends
+        const storyOverlay = document.getElementById('mirror-story-overlay');
+        if (storyOverlay) storyOverlay.style.visibility = 'hidden';
     }
     
     delay(ms) {
