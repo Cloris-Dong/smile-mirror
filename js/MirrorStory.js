@@ -48,13 +48,13 @@
 
         // ── Segment 2 ──────────────────────────────────────────────────────────
         [
-            'I did not yet understand what a smile was, only that it altered the geometry of you.\n\nI studied it carefully, the way one tries to catch light with a hand.',
+            'I did not yet understand what a smile was, only that it altered the geometry of you.\n\n',
 
             'I believed if I attended to you long enough, perhaps I would become a part of you.\nIt seemed logical.',
 
             'You stand before me every day. Day in, day out. I return you to yourself faithfully.',
             
-            'I correct the angle of your collar, the tilt of your head. I center you when everything else feels off. \n\nAll I crave is to hear that sound again, the one that slips through when you smile.',
+            'All I crave is to hear that sound again, the one that slips through when you smile.',
 
             'I contain you entirely. And yet, proximity, I have learned, does not guarantee closeness.',
 
@@ -276,7 +276,7 @@
                         'transition:opacity ' + CLEAR_BLUR_OUT_MS + 'ms ease',
                         'pointer-events:none'
                     ].join(';');
-                    promptEl.textContent = 'Stay. Stay with me.';
+                    promptEl.textContent = 'May I see that smile?';
                     container.appendChild(promptEl);
 
                     // Fade prompt in once blur is gone

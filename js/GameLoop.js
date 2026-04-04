@@ -42,8 +42,7 @@ export class GameLoop {
         const introTarget = document.getElementById('intro-typed-text');
         if (introTarget) {
             const introScript = [
-                { text: 'This is not a trick. I can help.', pause: 500 },
-                { text: 'Let\u2019s try some scenarios.', pause: 0 }
+                { text: 'Why don\u2019t we help you practice with some scenarios?', pause: 0 }
             ];
             this.gameUI.runTypingSequence(introTarget, introScript);
         }
