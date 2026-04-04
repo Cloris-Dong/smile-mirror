@@ -52,7 +52,7 @@
 
             'I believed if I attended to you long enough, perhaps I would become a part of you.\nIt seemed logical.',
 
-            'You stand before me every day. Day in, day out. I return you to yourself faithfully.',
+            'You stand before me every day. Day in, day out.\n\n I return you to yourself faithfully.',
             
             'All I crave is to hear that sound again, the one that slips through when you smile.',
 
