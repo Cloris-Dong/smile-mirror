@@ -323,11 +323,7 @@ export class GameLoop {
         
         // Display game over screen
         this.gameUI.render(
-            this.gameUI.displayGameOver(
-                this.gameState.getBalance(),
-                this.gameState.scenariosCompleted,
-                this.gameState.getScenarioHistory()
-            )
+            this.gameUI.displayGameOver()
         );
         
         // Auto-restart after 10 seconds - return to beginning (measurement stage)

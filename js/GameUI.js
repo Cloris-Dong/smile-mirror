@@ -782,8 +782,8 @@ export class GameUI {
     }
     
     // Display game over screen — stacked word typography, no card, no stats
-    displayGameOver(finalBalance, scenariosCompleted, scenarioHistory) {
-        const words = ['WILL', 'I', 'HAVE', 'THAT', 'SMILE', 'AGAIN?'];
+    displayGameOver() {
+        const words = ['I', 'AM', 'YOUR', 'MIRROR'];
         const wordDivs = words.map((word, i) => `
             <div style="
                 font-family: 'Courier New', 'Monaco', monospace;
