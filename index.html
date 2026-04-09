@@ -98,5 +98,17 @@
     
     <script src="js/MirrorStory.js"></script>
     <script src="script.js"></script>
+    <script>
+        (function () {
+            var hideTimer;
+            document.addEventListener('mousemove', function () {
+                document.body.style.cursor = 'default';
+                clearTimeout(hideTimer);
+                hideTimer = setTimeout(function () {
+                    document.body.style.cursor = 'none';
+                }, 2000);
+            });
+        })();
+    </script>
 </body>
 </html>
