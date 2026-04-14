@@ -30,7 +30,7 @@ app.post('/capture-face', upload.single('image'), async (req, res) => {
         }
 
         const imageBuffer = req.file.buffer;
-        const faceDir = path.join(__dirname, 'average-smile/face_images');
+        const faceDir = path.join(__dirname, 'face_images');
 
         // Ensure directory exists
         if (!fs.existsSync(faceDir)) {
@@ -94,12 +94,12 @@ app.post('/capture-face', upload.single('image'), async (req, res) => {
 });
 
 // Serve face images
-app.use('/images', express.static(path.join(__dirname, 'average-smile/face_images')));
+app.use('/images', express.static(path.join(__dirname, 'face_images')));
 
 // Get latest captured images
 app.get('/get-latest-images', (req, res) => {
     try {
-        const faceDir = path.join(__dirname, 'average-smile/face_images');
+        const faceDir = path.join(__dirname, 'face_images');
         
         if (!fs.existsSync(faceDir)) {
             return res.json({ images: [] });

@@ -8,7 +8,7 @@ A digital mirror application that measures smiles and captures face images of pe
 - Automatic face capture during smile verification
 - Backend processing to crop and save individual faces
 - Support for multiple people in frame (captures all detected faces)
-- Face images saved to `/average-smile/face_images/` directory
+- Face images saved to `/face_images/` directory (project root)
 - **NEW**: Automatically opens captured face images in new browser windows when the experience is complete
 
 ## Setup
@@ -66,11 +66,11 @@ smile-mirror/
 ├── index.html            # Frontend HTML
 ├── script.js             # Frontend JavaScript
 ├── styles.css            # Frontend CSS
-└── average-smile/
-    └── face_images/      # Saved face images and landmarks
-        ├── face_TIMESTAMP_0.jpg
-        ├── face_TIMESTAMP_0_landmarks.json
-        └── ...
+├── js/                   # Game + story modules (GameLoop, GameUI, MirrorStory, …)
+└── face_images/          # Saved face images and landmarks (created on first capture)
+    ├── face_TIMESTAMP_0.jpg
+    ├── face_TIMESTAMP_0_landmarks.json
+    └── ...
 ```
 
 ## Configuration

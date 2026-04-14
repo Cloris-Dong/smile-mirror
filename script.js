@@ -3014,7 +3014,7 @@ class DigitalMirror {
                 console.log('Face capture successful:', result);
                 
                 if (result.facesDetected > 0) {
-                    console.log(`Captured ${result.facesDetected} face(s) to /average-smile/face_images/`);
+                    console.log(`Captured ${result.facesDetected} face(s) to /face_images/`);
                     result.faceImages.forEach((face, index) => {
                         console.log(`Face ${index + 1}: ${face.filename}`);
                     });
