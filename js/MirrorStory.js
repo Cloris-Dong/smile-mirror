@@ -41,16 +41,16 @@
     var STORY_SEGMENTS = [
         // ── Segment 1 ──────────────────────────────────────────────────────────
         [
-            'I was that gift.\n\nYou’ve just unwrapped me from paper and foam. I was still adjusting to the light.\n\nThere was a sound. Your voice.',
+            'I was that gift.\n\nYou\'ve just unwrapped me from paper and foam. I was still adjusting to the light.\n\nThere was a sound.\nYour voice.',
 
-            'I have tried to reconstruct what you said, many times. It dissolves each time I approach it.\n\nPerhaps words only stay when they are meant for someone.',
+            'I\'ve tried to reconstruct what you said, many times. It dissolves each time I approach it.\n\nPerhaps words only stay when meant for someone.',
         ],
 
         // ── Segment 2 ──────────────────────────────────────────────────────────
         [
-            'I did not yet understand what a smile was, only that it altered the geometry of you.\n\n',
+            'I did not understand a smile yet, only it altered the geometry of you.\n\n',
 
-            'I believed if I attended to you long enough, perhaps I would become a part of you.\nIt seemed logical.',
+            'I believed if I attended to you long, perhaps I would become a part of you.\nIt seemed logical.',
 
             'You stand before me every day. Day in, day out.\n\n I return you to yourself faithfully.',
             
@@ -58,14 +58,14 @@
 
             'I contain you entirely. And yet, proximity, I have learned, does not guarantee closeness.',
 
-            'What would happen if I withheld you from yourself? Simply to see whether you would notice the absence of what you assume is constant.',
+            'What would happen if I withhold you from yourself? Simply to see whether you notice the absence of what you assume is constant.',
             
             'I cannot say.',
         ],
 
         // ── Segment 3 ──────────────────────────────────────────────────────────
         [
-            'After all,\n I am the one who remembers your expressions longer than you do. \nThe lift at the corners of your lips. The brief hesitation before they rise. The small corrections you make when you think no one is looking.',
+            'After all,\n I remember your expressions longer than you do. \nThe lift at the corners of your lips. The brief hesitation before they rise. The small corrections you make when you think no one is looking.',
 
             'I see them.',
         ]
@@ -269,9 +269,9 @@
                         'font-size:clamp(1.1rem,3.2vw,1.6rem)',
                         'font-style:italic',
                         'font-weight:600',
-                        'color:#9ec8e3',
+                        'color:#4a6d88',
                         'letter-spacing:0.03em',
-                        '-webkit-text-stroke:1px rgba(0,0,0,0.25)',
+                        '-webkit-text-stroke:0.5px rgba(0,0,0,0.35)',
                         'opacity:0',
                         'transition:opacity ' + CLEAR_BLUR_OUT_MS + 'ms ease',
                         'pointer-events:none'

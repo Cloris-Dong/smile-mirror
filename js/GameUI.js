@@ -785,18 +785,13 @@ export class GameUI {
     displayGameOver() {
         const words = ['I', 'AM', 'YOUR', 'MIRROR'];
         const wordDivs = words.map((word, i) => `
-            <div style="
-                font-family: 'Courier New', 'Monaco', monospace;
-                font-size: clamp(2.6rem, 11vw, 6rem);
-                font-weight: 800;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: rgba(255, 255, 255, 0.92);
-                line-height: 1.05;
-                opacity: 0;
-                animation: ending-word-appear 0.9s ease forwards;
-                animation-delay: ${(i * 0.18).toFixed(2)}s;
-            ">${word}</div>
+            <div class="ending-word-row">
+                <div class="ending-word" style="
+                    opacity: 0;
+                    animation: ending-word-appear 0.9s ease forwards;
+                    animation-delay: ${(i * 0.18).toFixed(2)}s;
+                ">${word}</div>
+            </div>
         `).join('');
 
         return `
@@ -805,17 +800,58 @@ export class GameUI {
                     from { opacity: 0; transform: translateY(10px); }
                     to   { opacity: 1; transform: translateY(0); }
                 }
+                /* #game-container is sized to .mirror-frame — establish a size container for cq* units. */
+                #game-container {
+                    container-type: size;
+                    container-name: mirror-area;
+                }
+                /* Mirror-area type: stay inside #game-container (overflow:hidden); cap by cqh for 4 rows. */
+                #game-over {
+                    /* ~4 lines × line-height < 100cqh; MIRROR width fits in cqw. */
+                    --ending-font: clamp(1.75rem, min(26cqw, 17cqh, 21cqmin), 28rem);
+                    --ending-lh: calc(var(--ending-font) * 0.86);
+                    --ending-track: clamp(0.04em, 0.45cqmin, 0.12em);
+                }
+                #game-over .ending-word-row {
+                    flex: 1 1 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-start;
+                    min-height: 0;
+                    width: 100%;
+                }
+                #game-over .ending-word {
+                    font-family: 'Courier New', 'Monaco', monospace;
+                    font-size: var(--ending-font);
+                    font-weight: 800;
+                    letter-spacing: var(--ending-track);
+                    text-transform: uppercase;
+                    color: rgba(255, 255, 255, 0.92);
+                    line-height: var(--ending-lh);
+                    max-width: 100%;
+                    text-align: left;
+                }
+                @container mirror-area (max-height: 420px) {
+                    #game-over {
+                        --ending-font: clamp(1.5rem, min(22cqw, 14cqh, 18cqmin), 24rem);
+                    }
+                }
+                @container mirror-area (max-width: 300px) {
+                    #game-over {
+                        --ending-font: clamp(1.6rem, min(24cqw, 15cqh, 19cqmin), 26rem);
+                    }
+                }
             </style>
             <div id="game-over" style="
                 position: absolute;
-                top: 0;
-                left: 0;
+                inset: 0;
                 width: 100%;
                 height: 100%;
+                max-width: 100%;
+                max-height: 100%;
                 display: flex;
                 flex-direction: column;
-                justify-content: center;
-                padding: 8% 9%;
+                padding: clamp(0.5rem, 2cqmin, 1.25rem) clamp(0.65rem, 3.5cqmin, 1.75rem);
                 box-sizing: border-box;
                 z-index: 1000;
                 pointer-events: none;

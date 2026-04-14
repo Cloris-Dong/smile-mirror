@@ -42,7 +42,7 @@ export class GameLoop {
         const introTarget = document.getElementById('intro-typed-text');
         if (introTarget) {
             const introScript = [
-                { text: 'Why don\u2019t we help you practice with some scenarios?', pause: 0 }
+                { text: 'Shall we try a few scenarios? It may help.', pause: 0 }
             ];
             this.gameUI.runTypingSequence(introTarget, introScript);
         }
@@ -75,7 +75,7 @@ export class GameLoop {
             {
                 id: 'fixed_haircut',
                 phase: 'trust',
-                promptText: "You look at yourself in the mirror with your new haircut and feel cute.",
+                promptText: "You look at your outfit in the mirror and feel cute.",
                 observationDuration: 10,
                 smileCost: -15,
                 noSmilePenalty: -25,
